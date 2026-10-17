@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rumkolonien</title>
+  <meta name="description" content="Byg en koloni på Mars: dyrk afgrøder i drivhuskupler, producer varer og lever ordrer til fragtskibe.">
+  <meta name="theme-color" content="#120d1c">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hud">
+    <div class="brand">🪐 <span>Rumkolonien</span></div>
+    <div class="stats">
+      <div class="stat" title="Kreditter">🪙 <b id="credits">0</b></div>
+      <div class="stat level" title="Niveau og erfaring">
+        <span class="lvl">⭐ <b id="level">1</b></span>
+        <div class="xpbar"><div id="xpfill"></div></div>
+        <small id="xptext">0/15</small>
+      </div>
+    </div>
+    <nav class="actions">
+      <button data-act="orders">🚀 Ordrer <span id="orderBadge" class="badge" hidden>0</span></button>
+      <button data-act="inventory">📦 Lager</button>
+      <button data-act="help" aria-label="Hjælp">❔</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="map-wrap">
+      <canvas id="map" aria-label="Kolonikort"></canvas>
+    </div>
+    <p class="hint">Tryk på et felt: plant i kuplerne, saml varer ved bygningerne, og lever ordrer ved landingspladsen.</p>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="sheet-head">
+        <h2 id="modalTitle"></h2>
+        <button class="close" data-act="close" aria-label="Luk">✕</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>
