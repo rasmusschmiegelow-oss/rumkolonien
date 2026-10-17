@@ -1,26 +1,29 @@
-# 🪐 Rumkolonien
+# Rumkolonien
 
-Et hyggeligt spil i browseren, hvor du bygger en koloni på Mars. Du dyrker afgrøder i drivhuskupler, laver varer i bygninger og leverer ordrer til fragtskibe i kredsløb.
+Et hyggeligt spil i browseren, hvor du bygger en koloni på Mars. Du dyrker afgrøder i drivhuskupler, laver varer i bygninger og leverer ordrer til fragtskibe og kolonister.
 
 **Spil her:** https://rasmusschmiegelow-oss.github.io/rumkolonien/
 
-## Sådan spiller du
+## Det kan spillet
 
-- 🫙 **Drivhuskupler:** Tryk for at plante. Når afgrøden er moden, trykker du igen og høster 2 stk.
-- 🧊 🖨️ ⚗️ 🏭 **Bygninger:** De laver varer af dine råvarer. Hver bygning har en kø med plads til 3 ting.
-- 🚀 **Landingsplads:** Lever det, skibene bestiller, og få kreditter og erfaring.
-- 🪨 **Udvid:** Ryd klipper og byg nye kupler og bygninger. Når du stiger i niveau, låser du op for nye afgrøder, bygninger og flere ordrer.
+- **Isometrisk kort** som du kan trække i og zoome på (knib eller scroll).
+- **Swipe-høst:** Træk fingeren hen over modne kupler for at høste dem alle, eller hen over tomme kupler for at plante igen.
+- **15 niveauer** med 10 afgrøder, 11 bygninger og 15 varer i produktionskæder (fx bomuld → stof → rumdragt).
+- **Kolonister med historier:** Ida, Bo, Kim og Dina beder om varer og fortæller lidt mere om livet på Mars, hver gang du hjælper dem.
+- **Robotter:** Høsterobotten høster og planter igen. Pakkedronen henter færdige varer. De arbejder også, mens du er væk.
+- **Begivenheder:** Støvstorme forsinker afgrøderne, med mindre du har et stormskjold. Ved meteorregn kan du samle jernmalm op.
+- **Ekspresordrer** med dobbelt belønning og tidsfrist.
+- **Lager med begrænset plads**, som kan udvides.
+- **Daglig belønning og ugens mål.**
+- **Dag og nat:** En sol varer 8 minutter. Solnedgangen er blå på Mars, og kuplerne lyser om natten.
+- **Lyd og vibration**, genereret i browseren.
+- **Tutorial** de første minutter.
 
-Spillet gemmes automatisk i browseren (`localStorage`), og det du har plantet eller sat i gang, bliver færdigt, mens du er væk.
+Spillet gemmes automatisk i browseren (`localStorage`).
 
-## Indhold
+## Grafik
 
-| Niveau | Nyt |
-|---|---|
-| 1 | 🥔 Kartofler, 🧊 Isbor (💧 vand), 🖨️ Madprinter (🍲 rumgryde) |
-| 2 | 🌿 Alger, ⚗️ Bioreaktor (💨 ilt, ⛽ brændstof) |
-| 3 | 🌾 Hvede, 🏭 Rumbageri (🍞 brød) |
-| 4 | 🍅 Tomater, 🍕 Marspizza |
+Alle ikoner er tegnet i [Paper](https://paper.design) som ét samlet sæt: SVG på et gitter på 64 × 64 (bygninger 96 × 96 isometrisk) med en kontur på 3 px. De ligger i `assets/icons/`.
 
 ## Kør lokalt
 
@@ -34,6 +37,12 @@ python3 -m http.server 8000
 
 ## Filer
 
-- `index.html`: HUD, kort og dialoger
-- `style.css`: udseende
-- `game.js`: spildata, logik, gemning og tegning af kortet på canvas
+| Fil | Indhold |
+|---|---|
+| `js/data.js` | Varer, afgrøder, opskrifter, bygninger, robotter, kolonister og tutorial |
+| `js/state.js` | Spilregler, gemning og alle handlinger |
+| `js/map.js` | Isometrisk kort, kamera, input, dag/nat, vejr og robotter |
+| `js/ui.js` | HUD, dialoger og beskeder |
+| `js/audio.js` | Lydeffekter med Web Audio |
+| `js/sprites.js` | Indlæsning af SVG-grafikken |
+| `js/main.js` | Opstart og hovedløkke |

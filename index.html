@@ -6,32 +6,38 @@
   <title>Rumkolonien</title>
   <meta name="description" content="Byg en koloni på Mars: dyrk afgrøder i drivhuskupler, producer varer og lever ordrer til fragtskibe.">
   <meta name="theme-color" content="#120d1c">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>">
+  <link rel="icon" href="assets/icons/rocket.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="hud">
-    <div class="brand">🪐 <span>Rumkolonien</span></div>
     <div class="stats">
-      <div class="stat" title="Kreditter">🪙 <b id="credits">0</b></div>
+      <div class="stat" title="Kreditter"><img class="ic" src="assets/icons/coin.svg" alt=""><b id="credits">0</b></div>
       <div class="stat level" title="Niveau og erfaring">
-        <span class="lvl">⭐ <b id="level">1</b></span>
+        <img class="ic" src="assets/icons/xp.svg" alt=""><b id="level">1</b>
         <div class="xpbar"><div id="xpfill"></div></div>
         <small id="xptext">0/15</small>
       </div>
+      <div class="stat clock" id="clock" title="Tid på Mars"></div>
     </div>
     <nav class="actions">
-      <button data-act="orders">🚀 Ordrer <span id="orderBadge" class="badge" hidden>0</span></button>
-      <button data-act="inventory">📦 Lager</button>
-      <button data-act="help" aria-label="Hjælp">❔</button>
+      <button data-act="orders" title="Ordrer"><img class="ic" src="assets/icons/rocket.svg" alt=""><span class="lbl">Ordrer</span><span id="orderBadge" class="badge" hidden>0</span></button>
+      <button data-act="inventory" title="Lager"><img class="ic" src="assets/icons/box.svg" alt=""><span id="silo" class="silo-count">0/50</span></button>
+      <button data-act="colony" title="Mål, robotter og kolonister"><img class="ic" src="assets/icons/goal.svg" alt=""><span class="lbl">Koloni</span><span id="colonyBadge" class="badge" hidden>0</span></button>
+      <button data-act="sound" id="soundBtn" class="icon-btn" aria-label="Lyd til eller fra"></button>
+      <button data-act="help" class="icon-btn" aria-label="Hjælp">?</button>
     </nav>
   </header>
 
   <main>
     <div class="map-wrap">
-      <canvas id="map" aria-label="Kolonikort"></canvas>
+      <canvas id="map" aria-label="Kort over kolonien"></canvas>
+      <div id="tutorial" class="banner top" hidden></div>
+      <div id="eventBanner" class="banner bottom" hidden></div>
     </div>
-    <p class="hint">Tryk på et felt: plant i kuplerne, saml varer ved bygningerne, og lever ordrer ved landingspladsen.</p>
   </main>
 
   <div id="modal" class="modal" hidden>
@@ -46,6 +52,12 @@
 
   <div id="toasts" aria-live="polite"></div>
 
-  <script src="game.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
