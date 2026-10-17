@@ -26,6 +26,12 @@ function loop(now) {
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; });
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // Når en ny version af appen tager over, genindlæses siden én gang, så alle filer passer sammen.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) { reloaded = true; save(); location.reload(); }
+  });
   navigator.serviceWorker.register('sw.js').catch(() => { /* spillet virker også uden */ });
 }
 

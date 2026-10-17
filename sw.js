@@ -1,6 +1,5 @@
 // Service worker: gør spillet installérbart og spilbart uden net.
-// Filer hentes fra cachen med det samme og opdateres i baggrunden.
-const CACHE = 'rumkolonien-v4';
+const CACHE = 'rumkolonien-v5';
 const FILES = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/data.js', 'js/audio.js', 'js/music.js', 'js/sprites.js', 'js/state.js', 'js/map.js', 'js/ui.js', 'js/main.js',
@@ -103,14 +102,20 @@ self.addEventListener('activate', (e) => {
     .then(() => self.clients.claim()));
 });
 
+// Kode og sider hentes fra nettet først, så en ny version slår igennem med det samme.
+// Ikoner ændrer sig sjældent og tages fra cachen. Uden net bruges cachen til alt.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(caches.open(CACHE).then(async (cache) => {
-    const hit = await cache.match(e.request, { ignoreSearch: true });
-    const net = fetch(e.request).then((res) => {
-      if (res.ok && new URL(e.request.url).origin === location.origin) cache.put(e.request, res.clone());
-      return res;
-    }).catch(() => hit);
-    return hit || net;
-  }));
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
+  const fromCache = () => caches.match(e.request, { ignoreSearch: true });
+  const fromNet = () => fetch(e.request).then((res) => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+    return res;
+  });
+  if (url.pathname.includes('/assets/')) {
+    e.respondWith(fromCache().then((hit) => hit || fromNet()));
+  } else {
+    e.respondWith(fromNet().catch(() => fromCache()));
+  }
 });
