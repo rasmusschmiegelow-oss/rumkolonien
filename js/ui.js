@@ -50,9 +50,11 @@ function onTile(idx) {
       return toast(`${icon(tile.crop)} ${ITEMS[tile.crop].name} er klar om ${fmtTime((tile.end - now) / 1000)}`);
     case 'b':
       if (BUILDINGS[tile.id].garage) return openGarage(idx);
+      if (BUILDINGS[tile.id].lab) return openLab(idx);
       collect(idx);
       return openBuilding(idx);
     case 'pen': return tapPen(idx);
+    case 'deco': return openDecor(idx);
     case 'pad': return openOrders();
     case 'empty': return openBuild(idx);
     case 'locked':
@@ -146,6 +148,37 @@ function upgradeHTML(idx) {
   return `<div class="section-title">Opgradering</div><div class="row upgrade"><div class="ico stars">${stars}</div><div class="info"><b>Niveau ${lvl}</b>${body}</div></div>`;
 }
 
+function openLab(idx) {
+  const a = S.research.active;
+  let head = '';
+  if (a) {
+    const r = RESEARCH[a.id];
+    head = `<div class="row active-res"><div class="ico">${icon('lab')}</div><div class="info"><b>Forsker i ${r.name}</b>
+      <div class="pbar"><div style="width:${Math.min(100, (Date.now() - a.start) / (a.end - a.start) * 100)}%"></div></div>
+      <small>Færdig om <span data-until="${a.end}"></span></small></div></div>`;
+  }
+  const rows = Object.entries(RESEARCH).map(([id, r]) => {
+    const st = researchState(id);
+    const ok = st === 'open' && !a && S.credits >= r.credits && Object.entries(r.cost).every(([it, q]) => have(it) >= q);
+    const why = st === 'locked' ? (r.level > S.level ? `Låses op på niveau ${r.level}` : `Kræver ${RESEARCH[r.needs].name}`) : r.desc;
+    return `<div class="row ${st === 'locked' ? 'locked' : ''} ${st === 'done' ? 'claimed' : ''}">
+      <div class="ico">${icon(st === 'done' ? 'medalje' : 'lab')}</div>
+      <div class="info"><b>${r.name}</b><small>${why} · ${fmtTime(r.time)}</small>
+      ${st === 'open' ? `<div class="needs">${needList(r.cost)}</div>` : ''}</div>
+      ${st === 'done' ? '<button disabled>Færdig</button>' : st === 'active' ? '<button disabled>I gang</button>'
+        : `<button class="primary" data-act="research" data-arg="${id}" ${ok ? '' : 'disabled'}>${r.credits} ${icon('coin', 'ic-s')}</button>`}
+    </div>`;
+  }).join('');
+  showModal(`${icon('lab')} Forskningslab`, `${head}<p class="muted tip">Forskning koster krystaller og artefakter fra roverens ekspeditioner. Fordelene gælder for altid.</p><div class="list">${rows}</div>`);
+}
+
+function openDecor(idx) {
+  const d = DECOR[S.tiles[idx].id];
+  showModal(`${icon(S.tiles[idx].id)} ${d.name}`, `
+    <p>+${d.happy} ${icon('lykke', 'ic-s')} lykke. Koloniens lykke er nu <b>${happiness()}</b> af ${HAPPY_MAX}, så alle ordrer betaler <b>${happiness()} %</b> mere.</p>
+    <button class="wide" data-act="removedeco" data-idx="${idx}">Fjern og få ${Math.round(d.cost / 2)} ${icon('coin', 'ic-s')} tilbage</button>`);
+}
+
 function openGarage(idx) {
   const x = S.expedition;
   if (x && Date.now() >= x.end) {
@@ -184,7 +217,7 @@ function orderCard(o, i) {
   return `<div class="order ${ok ? 'ready' : ''} ${o.express ? 'express' : ''}">
     <div class="order-head">${icon('rocket', 'ic-m')}${o.express ? `<span class="tag">Ekspres · <span data-until="${o.until}"></span></span>` : ''}</div>
     <div class="needs">${needList(o.items)}</div>
-    <div class="reward">+${o.credits} ${icon('coin', 'ic-s')} · +${o.xp} ${icon('xp', 'ic-s')}</div>
+    <div class="reward">+${orderPay(o.credits)} ${icon('coin', 'ic-s')} · +${o.xp} ${icon('xp', 'ic-s')}</div>
     <div class="btns">
       <button class="primary" data-act="deliver" data-arg="${i}" ${ok ? '' : 'disabled'}>Lever</button>
       <button data-act="discard" data-arg="${i}" title="Kassér ordren" aria-label="Kassér ordren">✕</button>
@@ -202,32 +235,81 @@ function openOrders() {
         <b>${def.name}</b>
         <p class="quote">“${colonistLine(c.id)}”</p>
         <div class="needs">${needList(c.items)}</div>
-        <div class="col-foot"><span class="reward">+${c.credits} ${icon('coin', 'ic-s')} · +${c.xp} ${icon('xp', 'ic-s')}</span>
+        <div class="col-foot"><span class="reward">+${orderPay(c.credits)} ${icon('coin', 'ic-s')} · +${c.xp} ${icon('xp', 'ic-s')}</span>
         <button class="primary" data-act="colonist" ${ok ? '' : 'disabled'}>Giv</button></div>
       </div>
     </div>`;
   }
+  let ship = '';
+  if (S.ship) {
+    const sh = S.ship, left = sh.crates.filter((c) => !c.done).length;
+    ship = `<div class="ship-box">
+      <div class="ship-head">${icon('moderskib', 'ic-l')}<div><b>Moderskibet</b>
+      <small>Flyver om <span data-until="${sh.until}"></span> · ${left} af ${sh.crates.length} containere mangler · bonus +${sh.bonus} ${icon('coin', 'ic-s')} og ${sh.krystal} ${icon('krystal', 'ic-s')}</small></div></div>
+      <div class="crates">${sh.crates.map((c, i) => `<div class="crate ${c.done ? 'done' : have(c.item) >= c.n ? 'ready' : ''}">
+        ${icon(c.done ? 'container' : c.item, 'ic-m')}
+        <small>${c.done ? 'Fyldt' : `${Math.min(have(c.item), c.n)}/${c.n}`}</small>
+        ${c.done ? '' : `<button class="primary" data-act="crate" data-arg="${i}" ${have(c.item) >= c.n ? '' : 'disabled'}>Læs</button>`}
+      </div>`).join('')}</div>
+    </div>`;
+  } else if (S.level >= SHIP.level && S.tut >= TUTORIAL.length) {
+    ship = `<p class="muted small">${icon('moderskib', 'ic-s')} Moderskibet kommer igen om <span data-until="${S.shipNext}"></span>.</p>`;
+  }
   showModal(`${icon('rocket')} Landingspladsen`,
-    `${col}<div class="section-title">Fragtskibe</div>
+    `${ship}${col}<div class="section-title">Fragtskibe${payMult() > 1 ? ` · +${Math.round((payMult() - 1) * 100)} % bonus` : ''}</div>
      <div class="orders">${S.orders.map(orderCard).join('')}</div>`);
 }
 
-function openInventory() {
+function priceTag(p) {
+  const arrow = p.trend > 0.05 ? '<span class="up">▲</span>' : p.trend < -0.05 ? '<span class="down">▼</span>' : '';
+  return `${arrow}${p.sell}${icon('coin', 'ic-s')}`;
+}
+
+function openInventory(tab = 'lager') {
+  const tabs = `<div class="tabs"><button class="${tab === 'lager' ? 'on' : ''}" data-act="invtab" data-arg="lager">${icon('box', 'ic-s')} Lager</button>
+    <button class="${tab === 'boers' ? 'on' : ''}" data-act="invtab" data-arg="boers">${icon('boers', 'ic-s')} Rumbørsen</button></div>`;
+  if (tab === 'boers') return openMarket(tabs);
   const ids = Object.keys(ITEMS).filter((id) => have(id) > 0);
   const used = invTotal(), c = cap(), cost = siloCost(S.silo);
-  const rows = ids.map((id) => `<div class="inv-item">
+  const rows = ids.map((id) => {
+    const p = marketPrice(id);
+    return `<div class="inv-item ${p.hot ? 'hot' : ''}">
       ${icon(id, 'ic-l')}
       <div class="info"><b>${have(id)}</b><small>${ITEMS[id].name}</small></div>
-      <button data-act="sell" data-arg="${id}" title="Sælg 1 for ${Math.max(1, Math.ceil(ITEMS[id].value / 2))} kreditter">+${Math.max(1, Math.ceil(ITEMS[id].value / 2))}${icon('coin', 'ic-s')}</button>
-    </div>`).join('');
+      <div class="sellbtns"><button data-act="sell" data-arg="${id}" title="Sælg 1">${priceTag(p)}</button>
+      ${have(id) > 1 ? `<button data-act="sellall" data-arg="${id}" title="Sælg alle">Alle</button>` : ''}</div>
+    </div>`;
+  }).join('');
   showModal(`${icon('box')} Lager`,
-    `<div class="silo">
+    `${tabs}<div class="silo">
       <div class="silo-bar"><div style="width:${Math.min(100, used / c * 100)}%" class="${used >= c ? 'full' : ''}"></div></div>
       <div class="silo-row"><span><b>${used}/${c}</b> pladser brugt</span>
       <button class="primary" data-act="silo" ${S.credits < cost ? 'disabled' : ''}>Udvid +30 · ${cost} ${icon('coin', 'ic-s')}</button></div>
     </div>
     <div class="inv">${rows || '<p class="muted">Lageret er tomt. Plant noget i kuplerne!</p>'}</div>
-    <p class="muted small">Tryk på prisen for at sælge én vare.</p>`);
+    <p class="muted small">Priserne følger Rumbørsen og skifter hver time. ▲ betyder, at prisen er steget siden sidste time.</p>`);
+}
+
+function openMarket(tabs) {
+  const hot = demandToday();
+  const hotRows = hot.map((id) => {
+    const p = marketPrice(id);
+    return `<div class="row hot"><div class="ico">${icon(id)}</div>
+      <div class="info"><b>${ITEMS[id].name}</b><small>80 % over normal pris i dag · du har ${have(id)}</small></div>
+      <button class="primary" data-act="sell" data-arg="${id}" data-tab="boers" ${have(id) ? '' : 'disabled'}>Sælg ${priceTag(p)}</button></div>`;
+  }).join('');
+  const buyRows = MARKET_BUY.filter((id) => !(id in CROPS) || CROPS[id].level <= S.level).map((id) => {
+    const p = marketPrice(id);
+    const arrow = p.trend > 0.05 ? '<span class="up">▲</span>' : p.trend < -0.05 ? '<span class="down">▼</span>' : '';
+    return `<div class="inv-item">${icon(id, 'ic-l')}<div class="info"><b>${have(id)}</b><small>${ITEMS[id].name}</small></div>
+      <div class="sellbtns"><button data-act="buy" data-arg="${id}" title="Køb 1">${arrow}${p.buy}${icon('coin', 'ic-s')}</button>
+      <button data-act="buy5" data-arg="${id}" title="Køb 5">×5</button></div></div>`;
+  }).join('');
+  const nextHour = (hourIndex() + 1) * MARKET_HOUR;
+  showModal(`${icon('boers')} Rumbørsen`, `${tabs}
+    <p class="muted small">Nye priser om <span data-until="${nextHour}"></span>.</p>
+    <div class="section-title">Dagens efterspørgsel</div><div class="list">${hotRows}</div>
+    <div class="section-title">Køb råvarer</div><div class="inv">${buyRows}</div>`);
 }
 
 function openBuild(idx) {
@@ -254,7 +336,17 @@ function openBuild(idx) {
       <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${built || locked || S.credits < b.cost ? 'disabled' : ''}>${b.cost} ${icon('coin', 'ic-s')}</button>
     </div>`;
   }
-  showModal(`${icon('box')} Byg her`, `<div class="list">${rows}</div>`);
+  let deco = '';
+  for (const [id, d] of Object.entries(DECOR)) {
+    const locked = d.level > S.level;
+    deco += `<div class="row ${locked ? 'locked' : ''}">
+      <div class="ico">${icon(id)}</div>
+      <div class="info"><b>${d.name}</b><small>${locked ? `Låses op på niveau ${d.level}` : `+${d.happy} lykke · ordrer betaler ${d.happy} % mere`}</small></div>
+      <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${locked || S.credits < d.cost ? 'disabled' : ''}>${d.cost} ${icon('coin', 'ic-s')}</button>
+    </div>`;
+  }
+  showModal(`${icon('box')} Byg her`, `<div class="list">${rows}</div>
+    <div class="section-title">Pynt · lykke ${happiness()}/${HAPPY_MAX}</div><div class="list">${deco}</div>`);
 }
 
 function openClear(idx) {
@@ -396,7 +488,19 @@ document.addEventListener('click', (e) => {
     case 'deliver': { const lvl = S.level; deliver(Number(arg)); if (S.level === lvl) openOrders(); return; }
     case 'discard': discard(Number(arg)); return openOrders();
     case 'colonist': { const lvl = S.level, res = deliverColonist(); if (res && S.level === lvl) showStory(res); return; }
-    case 'sell': sell(arg); return openInventory();
+    case 'sell': sell(arg); return openInventory(btn.dataset.tab || 'lager');
+    case 'sellall': sell(arg, have(arg)); return openInventory();
+    case 'invtab': Sound.play('click'); return openInventory(arg);
+    case 'buy': buyItem(arg, 1); return openInventory('boers');
+    case 'buy5': buyItem(arg, 5); return openInventory('boers');
+    case 'crate': { const lvl = S.level; loadCrate(Number(arg)); if (S.level === lvl) openOrders(); return; }
+    case 'research': if (startResearch(arg)) openLab(); return;
+    case 'removedeco': removeDecor(idx); return closeModal();
+    case 'music': {
+      const on = Music.toggle();
+      btn.innerHTML = icon(on ? 'musik' : 'musik-fra');
+      return;
+    }
     case 'silo': upgradeSilo(); return openInventory();
     case 'build': if (buildOn(idx, arg)) closeModal(); return;
     case 'clear': if (clearTile(idx)) closeModal(); return;
@@ -448,6 +552,9 @@ function updateHUD() {
   setBadge('orderBadge', ready);
   setBadge('colonyBadge', claimableGoals());
   $('silo').textContent = `${invTotal()}/${cap()}`;
+  const h = happiness();
+  $('happy').hidden = !h;
+  $('happyNum').textContent = `${h} %`;
   $('silo').classList.toggle('full', invTotal() >= cap());
   const clk = solClock();
   $('clock').innerHTML = `${icon(clk.night ? 'moon' : 'sun', 'ic-s')} Sol ${clk.sol} · ${clk.time}`;

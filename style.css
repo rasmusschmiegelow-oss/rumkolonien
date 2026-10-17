@@ -285,3 +285,31 @@ details.people summary::-webkit-details-marker { display: none; }
   width: 100%; margin-top: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace; padding: 8px;
   border: 2.5px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); resize: vertical;
 }
+
+/* ---------- Version 4 ---------- */
+.stat.happy { padding-right: 12px; }
+.stat[hidden] { display: none; }
+.ship-box { background: #EAF6FF; border: 2.5px solid var(--line); border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+.ship-head { display: flex; gap: 10px; align-items: center; }
+.ship-head small { display: block; color: var(--muted); font-size: 13px; }
+.crates { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; margin-top: 10px; }
+.crate {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; background: #fff;
+  border: 2.5px dashed #9EB8CC; border-radius: 12px; padding: 8px 4px;
+}
+.crate small { font-weight: 700; font-size: 12px; }
+.crate.ready { border: 2.5px solid var(--good); }
+.crate.done { border: 2.5px solid var(--line); background: #FFE7D2; }
+.crate button { padding: 3px 10px; font-size: 13px; }
+.sellbtns { display: flex; flex-direction: column; gap: 4px; }
+.sellbtns button { padding: 2px 6px; font-size: 12px; box-shadow: 0 2px 0 var(--line); border-width: 2px; }
+.inv-item.hot, .row.hot { background: #FFF6DC; }
+.up { color: #2E7D46; font-size: 10px; }
+.down { color: var(--bad); font-size: 10px; }
+.tabs button .ic-s { vertical-align: -3px; }
+.row.active-res { background: #F3EAFB; margin-bottom: 4px; }
+
+@media (max-width: 420px) {
+  .level small { display: none; }
+  .stat { font-size: 15px; }
+}

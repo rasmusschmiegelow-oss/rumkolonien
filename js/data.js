@@ -94,6 +94,7 @@ const BUILDINGS = {
   kaffebar:      { name: 'Kaffebar',       level: 10, cost: 1200, recipes: ['latte'] },
   krydderilab:   { name: 'Krydderilab',    level: 12, cost: 1600, recipes: ['chilisauce'] },
   garage:        { name: 'Rovergarage',    level: 7,  cost: 1000, recipes: [], garage: true, desc: 'Send roveren på ekspedition efter krystaller og artefakter.' },
+  lab:           { name: 'Forskningslab',  level: 8,  cost: 1500, recipes: [], lab: true, desc: 'Forsk i teknologier, der gør kolonien bedre for altid.' },
   vinkaelder:    { name: 'Vinkælder',      level: 14, cost: 2500, recipes: ['vin'] },
 };
 const QUEUE_MAX = 3;
@@ -143,6 +144,11 @@ const MEDALS = [
   { id: 'exp10', name: 'Marsforsker',        desc: 'Gennemfør 10 ekspeditioner.',          test: () => S.stats.expeditions >= 10, reward: 500 },
   { id: 'art',   name: 'Arkæolog',           desc: 'Find et artefakt.',                    test: () => S.stats.artefakter >= 1, reward: 300 },
   { id: 'rich',  name: 'Kreditkonge',        desc: 'Hav 10.000 kreditter på én gang.',     test: () => S.credits >= 10000, reward: 500 },
+  { id: 'ship',  name: 'Moderskibets ven',   desc: 'Fyld alle containere på moderskibet.', test: () => S.stats.ships >= 1, reward: 300 },
+  { id: 'res',   name: 'Videnskabsfolk',     desc: 'Gennemfør et forskningsprojekt.',      test: () => Object.keys(S.research.done).length >= 1, reward: 200 },
+  { id: 'resall',name: 'Fremtidens koloni',  desc: 'Gennemfør al forskning.',              test: () => Object.keys(S.research.done).length >= Object.keys(RESEARCH).length, reward: 2000 },
+  { id: 'happy', name: 'Lykkelig koloni',    desc: 'Nå 30 lykkepoint med pynt.',           test: () => happiness() >= HAPPY_MAX, reward: 500 },
+  { id: 'trade', name: 'Børshaj',            desc: 'Sælg 100 varer på Rumbørsen.',         test: () => S.stats.sold >= 100, reward: 250 },
 ];
 
 const ROBOTS = {
@@ -156,6 +162,7 @@ const ROBOTS = {
 const PERKS = {
   3: 'Ekspresordrer med dobbelt belønning',
   4: 'Begivenheder: støvstorme og meteorregn',
+  5: 'Moderskibet kommer på besøg',
   6: 'Bygningsopgraderinger: flere pladser i køen og hurtigere produktion',
   11: 'Flere ordrepladser',
   15: 'Titlen Koloniborgmester 🏅 og 1000 kreditter',
@@ -224,3 +231,34 @@ const siloCost = (lvl) => Math.round(80 * lvl ** 1.5);
 const DAY_MS = 8 * 60 * 1000; // én Mars-dag (sol) i spillet
 const STORM_MS = 90 * 1000;
 const METEOR_MS = 25 * 1000;
+
+// ---------- Version 4 ----------
+
+// Moderskibet kommer på besøg med 6 containere, der skal fyldes, før det flyver igen.
+const SHIP = { level: 5, crates: 6, stayMs: 3 * 60 * 60 * 1000, gapMs: 20 * 60 * 1000 };
+
+// Forskning: krystaller og artefakter fra ekspeditionerne bliver til varige fordele.
+const RESEARCH = {
+  vaekst1: { name: 'Hurtigere vækst', desc: 'Afgrøder gror 15 % hurtigere.',            cost: { krystal: 2 },              credits: 500,  time: 10 * 60, level: 8 },
+  hoest:   { name: 'Rig høst',        desc: '25 % chance for en ekstra afgrøde.',        cost: { krystal: 3 },              credits: 800,  time: 20 * 60, level: 8 },
+  handel:  { name: 'Forhandling',     desc: 'Ordrer betaler 15 % mere.',                 cost: { krystal: 3, artefakt: 1 }, credits: 1000, time: 30 * 60, level: 9 },
+  lager:   { name: 'Komprimering',    desc: 'Lageret får 60 pladser mere.',              cost: { krystal: 4 },              credits: 1200, time: 30 * 60, level: 9 },
+  dyr:     { name: 'Glade dyr',       desc: 'Dyrene producerer 30 % hurtigere.',         cost: { krystal: 3 },              credits: 900,  time: 20 * 60, level: 10 },
+  rover:   { name: 'Turbo-rover',     desc: 'Ekspeditioner tager 40 % kortere tid.',     cost: { krystal: 4, artefakt: 1 }, credits: 1500, time: 40 * 60, level: 10 },
+  robotai: { name: 'Robot-AI',        desc: 'Robotterne arbejder dobbelt så hurtigt.',   cost: { krystal: 5, artefakt: 1 }, credits: 2000, time: 45 * 60, level: 11 },
+  vaekst2: { name: 'Superfrø',        desc: 'Afgrøder gror yderligere 15 % hurtigere.',  cost: { krystal: 6, artefakt: 2 }, credits: 3000, time: 60 * 60, level: 12, needs: 'vaekst1' },
+};
+
+// Pynt gør kolonisterne glade. Hvert lykkepoint giver 1 % mere for ordrer (højst 30 %).
+const DECOR = {
+  'deco-lampe':      { name: 'Gadelampe',       cost: 80,   happy: 1,  level: 2 },
+  'deco-flag':       { name: 'Koloniflag',      cost: 150,  happy: 2,  level: 3 },
+  'deco-trae':       { name: 'Marstræ',         cost: 300,  happy: 3,  level: 4 },
+  'deco-statue':     { name: 'Astronautstatue', cost: 800,  happy: 6,  level: 7 },
+  'deco-springvand': { name: 'Springvand',      cost: 1500, happy: 10, level: 9 },
+};
+const HAPPY_MAX = 30;
+
+// Rumbørsen: priserne skifter hver time, og tre varer er i høj kurs hver dag.
+const MARKET_HOUR = 60 * 60 * 1000;
+const MARKET_BUY = ['kartoffel', 'alge', 'hvede', 'tomat', 'jordbaer', 'svamp', 'bomuld', 'kaffe', 'chili', 'druer', 'vand', 'jern', 'foder'];

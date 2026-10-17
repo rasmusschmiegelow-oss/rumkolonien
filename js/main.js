@@ -14,6 +14,8 @@ function loop(now) {
     colonistTick(t);
     tutorialTick();
     medalTick();
+    shipTick(t);
+    researchTick(t);
   }
   updateAgents(dt);
   draw(now);
@@ -35,6 +37,7 @@ async function start() {
   ensureWeekly();
   robotsCatchUp();
   $('soundBtn').innerHTML = icon(Sound.muted ? 'mute' : 'sound');
+  $('musicBtn').innerHTML = icon(Music.on ? 'musik' : 'musik-fra');
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   setInterval(save, 5000);

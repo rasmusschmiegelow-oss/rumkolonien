@@ -29,6 +29,14 @@ Et hyggeligt spil i browseren, hvor du bygger en koloni på Mars. Du dyrker afgr
 
 Spillet gemmes automatisk i browseren (`localStorage`).
 
+### Nyt i version 4
+
+- **Moderskibet** (fra niveau 5): et stort fragtskib svæver over landingspladsen med 6 containere, der skal fyldes inden for 3 timer. Hver container betaler, og fylder du dem alle, får du en stor bonus og krystaller.
+- **Forskningslab** (fra niveau 8): 8 teknologier, der koster krystaller og artefakter, fx hurtigere vækst, rig høst, forhandling, større lager, glade dyr, turbo-rover og Robot-AI.
+- **Pynt og kolonilykke:** gadelamper, flag, marstræer, statuer og springvand. Hvert lykkepoint giver 1 % mere for alle ordrer (højst 30 %). Lamperne lyser om natten.
+- **Rumbørsen:** priserne skifter hver time, tre varer er i høj kurs hver dag, og du kan købe råvarer, når du mangler dem.
+- **Musik:** stille ambient-musik genereret i browseren. Den skifter mellem en lys skala om dagen og en dybere om natten og kan slås til og fra for sig.
+
 ## Grafik
 
 Alle ikoner er tegnet i [Paper](https://paper.design) som ét samlet sæt: SVG på et gitter på 64 × 64 (bygninger 96 × 96 isometrisk) med en kontur på 3 px. De ligger i `assets/icons/`.
@@ -53,5 +61,6 @@ python3 -m http.server 8000
 | `js/ui.js` | HUD, dialoger og beskeder |
 | `js/audio.js` | Lydeffekter med Web Audio |
 | `js/sprites.js` | Indlæsning af SVG-grafikken |
+| `js/music.js` | Genereret ambient-musik til dag og nat |
 | `js/main.js` | Opstart og hovedløkke |
 | `sw.js`, `manifest.webmanifest` | Installérbar app og offline-cache |

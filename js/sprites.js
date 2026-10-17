@@ -5,7 +5,7 @@
 const ICON_DIR = 'assets/icons/';
 const SPRITES = {};
 const SPRITE_NAMES = [
-  ...Object.keys(ITEMS), ...Object.keys(BUILDINGS), ...Object.keys(ANIMALS), 'hone', 'ged', 'rover', 'medalje',
+  ...Object.keys(ITEMS), ...Object.keys(BUILDINGS), ...Object.keys(ANIMALS), 'hone', 'ged', 'rover', 'medalje', ...Object.keys(DECOR), 'moderskib', 'container', 'lykke', 'musik', 'musik-fra', 'boers',
   'plot', 'kuppel', 'pad', 'rock', 'sprout',
   'col-ida', 'col-bo', 'col-kim', 'col-dina', 'hoster', 'pakker',
   'rocket', 'coin', 'xp', 'box', 'goal', 'storm', 'meteor', 'gift', 'sun', 'moon', 'sound', 'mute',

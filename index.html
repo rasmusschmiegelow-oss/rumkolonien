@@ -25,12 +25,14 @@
         <div class="xpbar"><div id="xpfill"></div></div>
         <small id="xptext">0/15</small>
       </div>
+      <div class="stat happy" id="happy" title="Koloniens lykke: bonus på alle ordrer" hidden><img class="ic" src="assets/icons/lykke.svg" alt=""><b id="happyNum">0 %</b></div>
       <div class="stat clock" id="clock" title="Tid på Mars"></div>
     </div>
     <nav class="actions">
       <button data-act="orders" title="Ordrer"><img class="ic" src="assets/icons/rocket.svg" alt=""><span class="lbl">Ordrer</span><span id="orderBadge" class="badge" hidden>0</span></button>
       <button data-act="inventory" title="Lager"><img class="ic" src="assets/icons/box.svg" alt=""><span id="silo" class="silo-count">0/50</span></button>
       <button data-act="colony" title="Mål, robotter og kolonister"><img class="ic" src="assets/icons/goal.svg" alt=""><span class="lbl">Koloni</span><span id="colonyBadge" class="badge" hidden>0</span></button>
+      <button data-act="music" id="musicBtn" class="icon-btn" aria-label="Musik til eller fra"></button>
       <button data-act="sound" id="soundBtn" class="icon-btn" aria-label="Lyd til eller fra"></button>
       <button data-act="help" class="icon-btn" aria-label="Hjælp">?</button>
     </nav>
@@ -58,6 +60,7 @@
 
   <script src="js/data.js"></script>
   <script src="js/audio.js"></script>
+  <script src="js/music.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/state.js"></script>
   <script src="js/map.js"></script>

@@ -21,7 +21,7 @@ function newState() {
 
 // Udfylder felter, der mangler i gamle eller nye gemte spil.
 function defaults(st) {
-  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0 }, st.stats);
+  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0 }, st.stats);
   return Object.assign({
     v: 2, credits: 50, xp: 0, level: 1, cleared: 0, silo: 1, inv: {}, orders: [], lastCrop: null,
     stats: { harvest: 0, produce: 0, deliver: 0, earn: 0 },
@@ -30,6 +30,7 @@ function defaults(st) {
     daily: { last: '', streak: 0 }, weekly: { id: '', tasks: [] },
     event: { type: null, until: 0, nextAt: 0 }, pickups: [], mayor: false,
     medals: {}, expedition: null,
+    research: { done: {}, active: null }, ship: null, shipNext: 0,
   }, st, { stats });
 }
 
@@ -59,7 +60,7 @@ function save() {
 // ---------- Lager ----------
 const have = (id) => S.inv[id] || 0;
 const invTotal = () => Object.values(S.inv).reduce((a, b) => a + b, 0);
-const cap = () => siloCap(S.silo);
+const cap = () => siloCap(S.silo) + (hasTech('lager') ? 60 : 0);
 const spaceFor = (n) => invTotal() + n <= cap();
 function addItem(id, n) {
   S.inv[id] = have(id) + n;
@@ -97,6 +98,8 @@ function unlocksAt(lvl) {
   for (const [k, b] of Object.entries(BUILDINGS)) if (b.level === lvl) out.push(icon(k) + b.name);
   for (const [k, r] of Object.entries(RECIPES)) if (r.level === lvl && lvl > 1 && !(k in CROPS)) out.push(icon(k) + ITEMS[k].name);
   for (const [k, a] of Object.entries(ANIMALS)) if (a.level === lvl) out.push(icon(k) + a.name);
+  for (const [k, d] of Object.entries(DECOR)) if (d.level === lvl) out.push(icon(k) + d.name);
+  for (const r of Object.values(RESEARCH)) if (r.level === lvl && lvl > 8) out.push(icon('lab') + r.name);
   for (const e of EXPEDITIONS) if (e.level === lvl) out.push(icon('rover') + e.name);
   for (const [k, r] of Object.entries(ROBOTS)) if (r.level === lvl) out.push(icon(k) + r.name);
   for (const [k, c] of Object.entries(COLONISTS)) if (c.level === lvl && lvl > 1) out.push(icon('col-' + k) + c.name);
@@ -174,7 +177,8 @@ function deliver(i) {
   const o = S.orders[i];
   if (!o || !canFulfil(o)) return false;
   for (const [id, q] of Object.entries(o.items)) addItem(id, -q);
-  earn(o.credits);
+  const pay = orderPay(o.credits);
+  earn(pay);
   S.orders[i] = genOrder();
   S.stats.deliver++;
   track('deliver', 1);
@@ -183,7 +187,7 @@ function deliver(i) {
   Sound.play('whoosh');
   Sound.play('coin');
   Sound.buzz(20);
-  toast(`Ordre leveret: +${o.credits} ${icon('coin')} +${o.xp} ${icon('xp')}`, 'good');
+  toast(`Ordre leveret: +${pay} ${icon('coin')} +${o.xp} ${icon('xp')}`, 'good');
   save();
   return true;
 }
@@ -211,7 +215,7 @@ function plant(idx, crop, quiet) {
   if (S.credits < c.cost) return quiet ? false : fail('Ikke nok kreditter.');
   S.credits -= c.cost;
   const now = Date.now();
-  Object.assign(tile, { crop, start: now, end: now + c.time * 1000, last: crop });
+  Object.assign(tile, { crop, start: now, end: now + c.time * growthMult() * 1000, last: crop });
   S.lastCrop = crop;
   if (!quiet) Sound.play('plant');
   save();
@@ -223,11 +227,12 @@ function harvest(idx, auto) {
   if (!tile || tile.t !== 'plot' || !tile.crop || Date.now() < tile.end) return false;
   if (!spaceFor(HARVEST_YIELD)) return auto ? false : fail('Lageret er fuldt. Sælg varer, eller udvid lageret.');
   const crop = tile.crop;
-  addItem(crop, HARVEST_YIELD);
+  const n = HARVEST_YIELD + (hasTech('hoest') && Math.random() < 0.25 && spaceFor(HARVEST_YIELD + 1) ? 1 : 0);
+  addItem(crop, n);
   S.stats.harvest++;
-  track('harvest', HARVEST_YIELD);
+  track('harvest', n);
   addXP(CROPS[crop].xp);
-  floatItems(idx, [[crop, HARVEST_YIELD]]);
+  floatItems(idx, [[crop, n]]);
   burst(idx, '#7FD68F');
   Object.assign(tile, { crop: null, start: 0, end: 0 });
   if (!auto) { Sound.play('plop'); Sound.buzz(8); }
@@ -279,6 +284,12 @@ function buildOn(idx, what) {
     S.credits -= cost;
     S.tiles[idx] = { t: 'plot', crop: null, start: 0, end: 0 };
     toast(`${icon('kuppel')} Ny drivhuskuppel bygget!`, 'good');
+  } else if (DECOR[what]) {
+    const d = DECOR[what];
+    if (S.credits < d.cost) return fail('Ikke nok kreditter.');
+    S.credits -= d.cost;
+    S.tiles[idx] = { t: 'deco', id: what };
+    toast(`${icon(what)} ${d.name} sat op: +${d.happy} ${icon('lykke')}`, 'good');
   } else if (ANIMALS[what]) {
     const a = ANIMALS[what];
     if (S.credits < a.cost) return fail('Ikke nok kreditter.');
@@ -318,11 +329,13 @@ function clearTile(idx) {
   return true;
 }
 
-function sell(id) {
-  if (have(id) < 1) return;
-  const price = Math.max(1, Math.ceil(ITEMS[id].value / 2));
-  addItem(id, -1);
+function sell(id, n = 1) {
+  n = Math.min(n, have(id));
+  if (n < 1) return;
+  const price = marketPrice(id).sell * n;
+  addItem(id, -n);
   earn(price);
+  S.stats.sold += n;
   Sound.play('coin');
   save();
 }
@@ -382,7 +395,8 @@ function deliverColonist() {
   const c = S.colonist;
   if (!c || !canFulfil(c)) return false;
   for (const [id, q] of Object.entries(c.items)) addItem(id, -q);
-  earn(c.credits);
+  const pay = orderPay(c.credits);
+  earn(pay);
   addXP(c.xp);
   const def = COLONISTS[c.id];
   const chapter = S.story[c.id] < def.lines.length ? ++S.story[c.id] : null;
@@ -393,7 +407,7 @@ function deliverColonist() {
   Sound.play('coin');
   Sound.buzz(20);
   save();
-  return { id: c.id, credits: c.credits, xp: c.xp, chapter };
+  return { id: c.id, credits: pay, xp: c.xp, chapter };
 }
 
 // ---------- Daglig belønning og ugens mål ----------
@@ -568,7 +582,7 @@ function feedPen(idx) {
     if (!a.end && have('foder') > 0) {
       addItem('foder', -1);
       a.start = now;
-      a.end = now + def.time * 1000;
+      a.end = now + def.time * (hasTech('dyr') ? 0.7 : 1) * 1000;
       n++;
     }
   }
@@ -614,7 +628,7 @@ function startExpedition(id) {
   if (!e || S.expedition || e.level > S.level) return false;
   for (const [it, q] of Object.entries(e.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(e.cost)) addItem(it, -q);
-  S.expedition = { id, start: Date.now(), end: Date.now() + e.time * 1000 };
+  S.expedition = { id, start: Date.now(), end: Date.now() + e.time * (hasTech('rover') ? 0.6 : 1) * 1000 };
   Sound.play('whoosh');
   toast(`${icon('rover')} Roveren kører mod ${e.name}.`, 'good');
   save();
@@ -670,4 +684,145 @@ function importSave(code) {
   } catch (e) {
     return false;
   }
+}
+
+// ---------- Version 4: hjælpere ----------
+const hasTech = (id) => !!(S.research && S.research.done[id]);
+const growthMult = () => 1 - (hasTech('vaekst1') ? 0.15 : 0) - (hasTech('vaekst2') ? 0.15 : 0);
+const happiness = () => Math.min(HAPPY_MAX, S.tiles.reduce((a, t) => a + (t.t === 'deco' ? DECOR[t.id].happy : 0), 0));
+const payMult = () => 1 + (hasTech('handel') ? 0.15 : 0) + happiness() / 100;
+const orderPay = (credits) => Math.round(credits * payMult());
+
+// ---------- Pynt ----------
+function removeDecor(idx) {
+  const t = S.tiles[idx];
+  if (t.t !== 'deco') return;
+  const refund = Math.round(DECOR[t.id].cost / 2);
+  earn(refund);
+  S.tiles[idx] = { t: 'empty' };
+  Sound.play('build');
+  toast(`Pynten er fjernet: +${refund} ${icon('coin')}`);
+  save();
+}
+
+// ---------- Rumbørsen ----------
+const hourIndex = (now = Date.now()) => Math.floor(now / MARKET_HOUR);
+function marketFactor(id, h = hourIndex()) {
+  const k = Object.keys(ITEMS).indexOf(id);
+  const x = Math.sin((k + 1) * 91.7 + h * 12.9898) * 43758.5453;
+  return 0.7 + 0.6 * (x - Math.floor(x));
+}
+function demandToday() {
+  const day = Math.floor(Date.now() / 86400000);
+  const pool = unlockedPool().filter((id) => !(id in CROPS)).concat(unlockedPool().filter((id) => id in CROPS)).sort();
+  const out = [];
+  for (let i = 0; out.length < 3 && i < 40 && pool.length; i++) {
+    const x = Math.sin(day * 7.13 + i * 3.7) * 43758.5453;
+    const id = pool[Math.floor((x - Math.floor(x)) * pool.length)];
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+function marketPrice(id) {
+  const f = marketFactor(id), base = ITEMS[id].value;
+  const hot = demandToday().includes(id);
+  return {
+    // Købsprisen ligger altid over den højeste salgspris, så man ikke kan tjene på at købe og sælge igen.
+    sell: Math.max(1, Math.round(base * 0.5 * f * (hot ? 1.8 : 1))),
+    buy: Math.max(2, Math.ceil(base * 1.8 * f)),
+    trend: f - marketFactor(id, hourIndex() - 1),
+    hot,
+  };
+}
+function buyItem(id, n = 1) {
+  const price = marketPrice(id).buy * n;
+  if (S.credits < price) return fail('Ikke nok kreditter.');
+  if (!spaceFor(n)) return fail('Lageret er fuldt.');
+  S.credits -= price;
+  addItem(id, n);
+  Sound.play('coin');
+  save();
+  return true;
+}
+
+// ---------- Moderskibet ----------
+function shipTick(now) {
+  if (S.level < SHIP.level || S.tut < TUTORIAL.length) return;
+  if (S.ship && now >= S.ship.until) {
+    S.ship = null;
+    S.shipNext = now + SHIP.gapMs;
+    toast(`${icon('moderskib')} Moderskibet er fløjet videre.`);
+    save();
+  }
+  if (!S.ship && now >= S.shipNext) {
+    const crates = [];
+    for (let i = 0, tries = 0; crates.length < SHIP.crates && tries < 60; i++, tries++) {
+      const { items, worth } = genItems(1, 1.4);
+      const [item, n] = Object.entries(items)[0];
+      // hver container får sin egen vare, så længe der er nok forskellige at vælge imellem
+      if (crates.some((c) => c.item === item) && tries < 40) continue;
+      crates.push({ item, n, credits: Math.round(worth * 1.3), xp: Math.max(2, Math.round(worth / 4)), done: false });
+    }
+    const total = crates.reduce((a, c) => a + c.credits, 0);
+    S.ship = { crates, until: now + SHIP.stayMs, bonus: Math.round(total * 0.6), krystal: 1 + (S.level >= 9 ? 1 : 0) };
+    Sound.play('whoosh');
+    toast(`${icon('moderskib')} Moderskibet er ankommet! Fyld containerne ved landingspladsen.`, 'good', 4500);
+    save();
+  }
+}
+
+function loadCrate(i) {
+  const sh = S.ship, c = sh && sh.crates[i];
+  if (!c || c.done) return false;
+  if (have(c.item) < c.n) return fail(`Mangler ${ITEMS[c.item].name}.`);
+  addItem(c.item, -c.n);
+  c.done = true;
+  const pay = orderPay(c.credits);
+  earn(pay);
+  addXP(c.xp);
+  Sound.play('coin');
+  if (sh.crates.every((x) => x.done)) {
+    earn(sh.bonus);
+    addItem('krystal', sh.krystal);
+    S.stats.ships++;
+    S.ship = null;
+    S.shipNext = Date.now() + SHIP.gapMs;
+    launchShip();
+    Sound.play('level');
+    toast(`${icon('moderskib')} Alle containere er fyldt! Bonus: +${sh.bonus} ${icon('coin')} og ${sh.krystal} ${icon('krystal')}`, 'good', 5000);
+  }
+  save();
+  return true;
+}
+
+// ---------- Forskning ----------
+function researchState(id) {
+  const r = RESEARCH[id];
+  if (hasTech(id)) return 'done';
+  if (S.research.active && S.research.active.id === id) return 'active';
+  if (r.level > S.level || (r.needs && !hasTech(r.needs))) return 'locked';
+  return 'open';
+}
+
+function startResearch(id) {
+  const r = RESEARCH[id];
+  if (S.research.active || researchState(id) !== 'open') return false;
+  if (S.credits < r.credits) return fail('Ikke nok kreditter.');
+  for (const [it, q] of Object.entries(r.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
+  for (const [it, q] of Object.entries(r.cost)) addItem(it, -q);
+  S.credits -= r.credits;
+  S.research.active = { id, start: Date.now(), end: Date.now() + r.time * 1000 };
+  Sound.play('build');
+  save();
+  return true;
+}
+
+function researchTick(now) {
+  const a = S.research.active;
+  if (!a || now < a.end) return;
+  S.research.done[a.id] = true;
+  S.research.active = null;
+  Sound.play('level');
+  toast(`${icon('lab')} Forskning færdig: <b>${RESEARCH[a.id].name}</b>. ${RESEARCH[a.id].desc}`, 'good', 5000);
+  save();
 }

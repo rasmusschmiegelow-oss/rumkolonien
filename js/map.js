@@ -111,7 +111,7 @@ function drawGround(idx) {
   if (t.t !== 'locked') {
     ctx.strokeStyle = '#2A1A1418'; ctx.lineWidth = 1; ctx.stroke();
   }
-  if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad' && t.t !== 'pen') {
+  if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad' && t.t !== 'pen' && t.t !== 'deco') {
     ctx.fillStyle = '#00000022';
     ctx.beginPath(); ctx.ellipse(x + (hash(idx + 7) - 0.5) * 30, y + (hash(idx + 8) - 0.5) * 10, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -198,6 +198,11 @@ function drawTile(idx, now, t) {
     // Kuplen tegnes lidt fladere end ikonet, så den ikke skjuler felterne bagved.
     const kp = SPRITES.kuppel;
     if (kp) { const w = 96 * SPRITE_K * 0.92, h = w * 0.68; ctx.drawImage(kp.img, x - w / 2, y + 22 - h, w, h); }
+  } else if (tile.t === 'deco') {
+    drawSprite(ctx, tile.id, x, y, 96 * SPRITE_K * 0.85, 72);
+    if (tile.id === 'deco-springvand' && Math.random() < 0.3) {
+      particles.push({ x: x + rand(-6, 6), y: y - 48, vx: rand(-25, 25), vy: rand(-90, -50), life: 0.7, color: '#BFE8FF', s: rand(2, 3.5) });
+    }
   } else if (tile.t === 'pen') {
     const def = ANIMALS[tile.id];
     drawSprite(ctx, tile.id, x, y, 96 * SPRITE_K, foot);
@@ -316,6 +321,13 @@ function drawNight(light, phase) {
   if (dark > 0.2) {
     ctx.globalCompositeOperation = 'lighter';
     S.tiles.forEach((tile, idx) => {
+      if (tile.t === 'deco' && tile.id === 'deco-lampe') {
+        const [lx, ly] = tileCenter(idx);
+        const g = ctx.createRadialGradient(lx + 10, ly - 48, 2, lx + 10, ly - 30, 70);
+        g.addColorStop(0, `rgba(255,214,120,${dark * 1.2})`); g.addColorStop(1, 'rgba(255,214,120,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lx + 10, ly - 30, 70, 0, Math.PI * 2); ctx.fill();
+        return;
+      }
       if (tile.t !== 'plot' && tile.t !== 'b' && tile.t !== 'pad' && tile.t !== 'pen') return;
       const [x, y] = tileCenter(idx);
       const col = tile.t === 'plot' ? '127,214,143' : tile.t === 'pad' ? '255,122,26' : '255,200,120';
@@ -370,6 +382,25 @@ function draw(now) {
   for (const o of order) o.fn();
 
   drawNight(light, phase);
+
+  if (S.ship) {
+    const pad = S.tiles.findIndex((tt) => tt.t === 'pad');
+    if (pad >= 0) {
+      const [px, py] = tileCenter(pad);
+      const bob = Math.sin(now / 700) * 6;
+      ctx.fillStyle = '#00000022';
+      ctx.beginPath(); ctx.ellipse(px - 70, py - 20, 60, 18, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createLinearGradient(0, py - 150, 0, py - 20);
+      g.addColorStop(0, 'rgba(91,184,240,0.35)'); g.addColorStop(1, 'rgba(91,184,240,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(px - 100, py - 150 + bob); ctx.lineTo(px - 40, py - 150 + bob); ctx.lineTo(px - 20, py - 20); ctx.lineTo(px - 120, py - 20); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      drawSprite(ctx, 'moderskib', px - 70, py - 170 + bob, 150, 32);
+      const left = S.ship.crates.filter((c) => !c.done).length;
+      badge(px - 10, py - 200 + bob, String(left));
+    }
+  }
 
   const tgt = tutorialTarget();
   if (tgt >= 0) drawArrow(tgt, now);
@@ -459,7 +490,7 @@ function updateAgents(dt) {
     if (a.target >= 0) [tx, ty] = tileCenter(a.target);
     else { const [hx, hy] = homeOf(); tx = hx + (a.fly ? -30 : 40); ty = hy + 10; }
     const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-    const speed = a.fly ? 160 : 110;
+    const speed = (a.fly ? 160 : 110) * (hasTech('robotai') ? 2 : 1);
     if (d < 4) {
       if (a.target >= 0) {
         const tt = S.tiles[a.target];
