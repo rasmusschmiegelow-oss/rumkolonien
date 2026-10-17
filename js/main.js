@@ -13,12 +13,18 @@ function loop(now) {
     eventTick(t);
     colonistTick(t);
     tutorialTick();
+    medalTick();
   }
   updateAgents(dt);
   draw(now);
   updateHUD();
   if (modalView && now - lastModalTick > 500) { lastModalTick = now; modalView(); }
   requestAnimationFrame(loop);
+}
+
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; });
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* spillet virker også uden */ });
 }
 
 async function start() {

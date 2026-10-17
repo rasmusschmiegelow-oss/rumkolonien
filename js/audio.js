@@ -5,6 +5,8 @@ const Sound = (() => {
   const KEY = 'rumkolonien-mute';
   let ac = null;
   let muted = false;
+  let tapped = false; // browsere tillader kun vibration efter et tryk på skærmen
+  window.addEventListener('pointerdown', () => { tapped = true; }, { once: true, capture: true });
   try { muted = localStorage.getItem(KEY) === '1'; } catch (e) { /* ingen lagring */ }
 
   function audio() {
@@ -62,7 +64,10 @@ const Sound = (() => {
 
   return {
     play(name) { if (!muted) try { fx[name] && fx[name](); } catch (e) { /* lyd er pynt */ } },
-    buzz(ms = 12) { if (!muted && navigator.vibrate) try { navigator.vibrate(ms); } catch (e) { /* ikke understøttet */ } },
+    buzz(ms = 12) {
+      if (muted || !navigator.vibrate || !tapped) return;
+      try { navigator.vibrate(ms); } catch (e) { /* ikke understøttet */ }
+    },
     toggle() {
       muted = !muted;
       try { localStorage.setItem(KEY, muted ? '1' : '0'); } catch (e) { /* ingen lagring */ }

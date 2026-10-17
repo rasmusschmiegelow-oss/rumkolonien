@@ -1,6 +1,8 @@
 'use strict';
 // HUD, dialoger, beskeder og bannere.
 
+let installPrompt = null; // sættes, når browseren tilbyder at installere appen
+
 const $ = (id) => document.getElementById(id);
 const modal = $('modal');
 let modalView = null; // opdaterer den åbne dialog uden at udskifte knapperne
@@ -29,7 +31,9 @@ function toast(html, kind = '', ms = 2800) {
   const el = document.createElement('div');
   el.className = 'toast ' + kind;
   el.innerHTML = html;
-  $('toasts').appendChild(el);
+  const box = $('toasts');
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstElementChild.remove();
   setTimeout(() => el.remove(), ms);
 }
 
@@ -45,8 +49,10 @@ function onTile(idx) {
       if (now >= tile.end) return harvest(idx);
       return toast(`${icon(tile.crop)} ${ITEMS[tile.crop].name} er klar om ${fmtTime((tile.end - now) / 1000)}`);
     case 'b':
+      if (BUILDINGS[tile.id].garage) return openGarage(idx);
       collect(idx);
       return openBuilding(idx);
+    case 'pen': return tapPen(idx);
     case 'pad': return openOrders();
     case 'empty': return openBuild(idx);
     case 'locked':
@@ -71,7 +77,7 @@ function openPlant(idx) {
 
 function queueSlots(tile, now) {
   let html = '';
-  for (let i = 0; i < QUEUE_MAX; i++) {
+  for (let i = 0; i < queueMax(tile); i++) {
     const q = tile.queue[i];
     if (!q) { html += '<div class="slot"></div>'; continue; }
     const done = q.end <= now;
@@ -89,11 +95,11 @@ function refreshBuilding(idx) {
   if (!el || tile.t !== 'b') return;
   const now = Date.now();
   el.innerHTML = queueSlots(tile, now);
-  $('bcount').textContent = `Kø (${tile.queue.length}/${QUEUE_MAX})`;
+  $('bcount').textContent = `Kø (${tile.queue.length}/${queueMax(tile)})`;
   $('bcollect').hidden = !tile.queue.some((q) => q.end <= now);
   document.querySelectorAll('[data-act="make"]').forEach((btn) => {
     const r = RECIPES[btn.dataset.arg];
-    btn.disabled = r.level > S.level || tile.queue.length >= QUEUE_MAX || !Object.entries(r.in).every(([id, q]) => have(id) >= q);
+    btn.disabled = r.level > S.level || tile.queue.length >= queueMax(tile) || !Object.entries(r.in).every(([id, q]) => have(id) >= q);
   });
 }
 
@@ -108,7 +114,7 @@ function openBuilding(idx) {
     const locked = r.level > S.level;
     return `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(rid)}</div>
-      <div class="info"><b>${ITEMS[rid].name}</b><small>${locked ? `Låses op på niveau ${r.level}` : `${fmtTime(r.time)} · +${r.xp} ${icon('xp', 'ic-s')}`}</small>
+      <div class="info"><b>${ITEMS[rid].name}</b><small>${locked ? `Låses op på niveau ${r.level}` : `${fmtTime(r.time * speedOf(tile))} · +${r.xp} ${icon('xp', 'ic-s')}`}</small>
       ${locked ? '' : `<div class="needs">${needList(r.in)}</div>`}</div>
       <button class="primary" data-act="make" data-idx="${idx}" data-arg="${rid}">Producér</button>
     </div>`;
@@ -117,9 +123,60 @@ function openBuilding(idx) {
     `<div class="section-title" id="bcount"></div>
      <div class="queue" id="bslots"></div>
      <p id="bcollect" hidden><button class="primary wide" data-act="collect" data-idx="${idx}">Saml færdige varer</button></p>
-     <div class="section-title">Opskrifter</div><div class="list">${rows}</div>`,
+     <div class="section-title">Opskrifter</div><div class="list">${rows}</div>
+     ${upgradeHTML(idx)}`,
     () => refreshBuilding(idx));
   refreshBuilding(idx);
+}
+
+function upgradeHTML(idx) {
+  const tile = S.tiles[idx], b = BUILDINGS[tile.id], lvl = tile.lvl || 1;
+  const stars = Array.from({ length: UPGRADE_MAX }, (_, k) => `<span class="${k < lvl ? 'on' : ''}">${icon('xp', 'ic-s')}</span>`).join('');
+  let body;
+  if (lvl >= UPGRADE_MAX) body = '<small>Fuldt opgraderet</small>';
+  else if (S.level < 6) body = '<small>Opgraderinger låses op på niveau 6</small>';
+  else {
+    const c = upgradeCost(b, lvl);
+    body = `<small>Niveau ${lvl + 1}: ${QUEUE_MAX + lvl} pladser i køen og ${Math.round(lvl * 15)} % hurtigere</small>
+      <div class="needs"><span class="need-chip ${have('jern') >= c.jern ? 'ok' : 'no'}">${icon('jern')}${have('jern')}/${c.jern}</span></div>`;
+    return `<div class="section-title">Opgradering</div><div class="row upgrade">
+      <div class="ico stars">${stars}</div><div class="info"><b>Niveau ${lvl}</b>${body}</div>
+      <button class="primary" data-act="upgrade" data-idx="${idx}" ${S.credits < c.credits || have('jern') < c.jern ? 'disabled' : ''}>${c.credits} ${icon('coin', 'ic-s')}</button></div>`;
+  }
+  return `<div class="section-title">Opgradering</div><div class="row upgrade"><div class="ico stars">${stars}</div><div class="info"><b>Niveau ${lvl}</b>${body}</div></div>`;
+}
+
+function openGarage(idx) {
+  const x = S.expedition;
+  if (x && Date.now() >= x.end) {
+    const res = finishExpedition();
+    const list = res.found.map(([it, n]) => `<span>${icon(it)} ${n} × ${ITEMS[it].name}</span>`).join('');
+    showModal(`${icon('rover')} Roveren er tilbage!`, `
+      <p>Fra ${res.e.name} har roveren fundet:</p>
+      <div class="unlocks">${list || '<span>Kun støv denne gang</span>'}</div>
+      <p class="muted small">Krystaller og artefakter kan sælges dyrt på lageret.</p>
+      <button class="primary wide" data-act="close">Fantastisk</button>`);
+    return;
+  }
+  if (x) {
+    const e = EXPEDITIONS.find((y) => y.id === x.id);
+    showModal(`${icon('garage')} Rovergarage`, `
+      <div class="row"><div class="ico">${icon('rover')}</div><div class="info"><b>På vej til ${e.name}</b>
+      <small>Tilbage om <span data-until="${x.end}"></span></small></div></div>`);
+    return;
+  }
+  const rows = EXPEDITIONS.map((e) => {
+    const locked = e.level > S.level;
+    const ok = !locked && Object.entries(e.cost).every(([it, q]) => have(it) >= q);
+    const loot = e.loot.map(([it, , , ch]) => `${icon(it, 'ic-s')}${ch < 1 ? ` ${Math.round(ch * 100)} %` : ''}`).join(' ');
+    return `<div class="row ${locked ? 'locked' : ''}">
+      <div class="ico">${icon('rover')}</div>
+      <div class="info"><b>${e.name}</b><small>${locked ? `Låses op på niveau ${e.level}` : `${e.desc} · ${fmtTime(e.time)} · fund: ${loot}`}</small>
+      ${locked ? '' : `<div class="needs">${needList(e.cost)}</div>`}</div>
+      <button class="primary" data-act="expedition" data-arg="${e.id}" ${ok ? '' : 'disabled'}>Send</button>
+    </div>`;
+  }).join('');
+  showModal(`${icon('garage')} Rovergarage`, `<p class="muted tip">Roveren skal have brændstof og proviant med.</p><div class="list">${rows}</div>`);
 }
 
 function orderCard(o, i) {
@@ -180,6 +237,14 @@ function openBuild(idx) {
       <div class="info"><b>Drivhuskuppel</b><small>Her dyrker du afgrøder</small></div>
       <button class="primary" data-act="build" data-idx="${idx}" data-arg="plot" ${S.credits < pc ? 'disabled' : ''}>${pc} ${icon('coin', 'ic-s')}</button>
     </div>`;
+  for (const [id, a] of Object.entries(ANIMALS)) {
+    const locked = a.level > S.level;
+    rows += `<div class="row ${locked ? 'locked' : ''}">
+      <div class="ico">${icon(id)}</div>
+      <div class="info"><b>${a.name}</b><small>${locked ? `Låses op på niveau ${a.level}` : `${PEN_SIZE} ${a.animalName.toLowerCase()}, der giver ${ITEMS[a.product].name.toLowerCase()}, når de får foder`}</small></div>
+      <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${locked || S.credits < a.cost ? 'disabled' : ''}>${a.cost} ${icon('coin', 'ic-s')}</button>
+    </div>`;
+  }
   for (const [id, b] of Object.entries(BUILDINGS)) {
     const built = owns(id), locked = b.level > S.level;
     const what = b.recipes.length ? 'Laver ' + b.recipes.map((r) => ITEMS[r].name.toLowerCase()).join(', ') : b.desc;
@@ -199,7 +264,7 @@ function openClear(idx) {
 }
 
 function openColony(tab = 'goals') {
-  const tabs = [['goals', 'Mål'], ['robots', 'Robotter'], ['people', 'Kolonister']];
+  const tabs = [['goals', 'Mål'], ['medals', 'Medaljer'], ['robots', 'Robotter'], ['people', 'Kolonister']];
   let body = '';
   if (tab === 'goals') {
     const streak = S.daily.streak || 0, day = ((Math.max(1, streak) - 1) % 7) + 1;
@@ -218,6 +283,13 @@ function openColony(tab = 'goals') {
         <button class="primary" data-act="claim" data-arg="${i}" ${done && !t.claimed ? '' : 'disabled'}>${t.claimed ? 'Hentet' : 'Hent'}</button>
       </div>`;
     });
+    body += '</div>';
+  } else if (tab === 'medals') {
+    const got = MEDALS.filter((m) => S.medals[m.id]).length;
+    body += `<p class="muted small">${got} af ${MEDALS.length} medaljer</p><div class="medals">`;
+    for (const m of MEDALS) {
+      body += `<div class="medal ${S.medals[m.id] ? 'got' : ''}">${icon('medalje', 'ic-l')}<b>${m.name}</b><small>${m.desc}</small><small class="rw">+${m.reward} ${icon('coin', 'ic-s')}</small></div>`;
+    }
     body += '</div>';
   } else if (tab === 'robots') {
     body += '<div class="list">';
@@ -285,10 +357,18 @@ function openHelp() {
       <div class="row"><div class="ico">${icon('madprinter')}</div><div class="info"><b>Bygninger</b><small>De laver varer af dine råvarer. Hver bygning har plads til 3 ting i køen.</small></div></div>
       <div class="row"><div class="ico">${icon('pad')}</div><div class="info"><b>Landingspladsen</b><small>Fragtskibe og kolonister beder om varer. Ekspresskibe betaler det dobbelte, men venter ikke længe.</small></div></div>
       <div class="row"><div class="ico">${icon('box')}</div><div class="info"><b>Lager</b><small>Der er begrænset plads. Udvid lageret, eller sælg det, du ikke skal bruge.</small></div></div>
+      <div class="row"><div class="ico">${icon('hoensehus')}</div><div class="info"><b>Dyr</b><small>Rumhøns og marsgeder giver æg og mælk, når de får foder. Tryk på indhegningen for at samle ind og fodre.</small></div></div>
+      <div class="row"><div class="ico">${icon('rover')}</div><div class="info"><b>Ekspeditioner</b><small>Fra niveau 7 kan roveren køre ud efter krystaller og artefakter.</small></div></div>
       <div class="row"><div class="ico">${icon('storm')}</div><div class="info"><b>Vejret på Mars</b><small>Støvstorme gør, at afgrøderne gror langsommere. Ved meteorregn kan du samle jernmalm op.</small></div></div>
       <div class="row"><div class="ico">${icon('moon')}</div><div class="info"><b>Dag og nat</b><small>En sol (Mars-dag) varer 8 minutter. Solnedgangen er blå på Mars.</small></div></div>
     </div>
     <p class="muted small">Træk i kortet for at flytte det, og knib eller scroll for at zoome. Spillet gemmes i din browser.</p>
+    <div class="section-title">Spil på flere enheder</div>
+    <p class="small">Med en gemmekode kan du flytte din koloni til en anden telefon eller computer.</p>
+    <div class="btnrow"><button data-act="export">Vis gemmekode</button><button data-act="import">Indlæs gemmekode</button>
+    ${installPrompt ? '<button class="primary" data-act="install">Installér som app</button>' : ''}</div>
+    <div id="savebox"></div>
+    <div class="section-title">Forfra</div>
     <button data-act="reset">Start en ny koloni</button>`);
 }
 
@@ -322,6 +402,33 @@ document.addEventListener('click', (e) => {
     case 'clear': if (clearTile(idx)) closeModal(); return;
     case 'robot': buyRobot(arg); return openColony('robots');
     case 'claim': { const lvl = S.level; claimWeekly(Number(arg)); if (S.level === lvl) openColony('goals'); return; }
+    case 'upgrade': if (upgradeBuilding(idx)) openBuilding(idx); return;
+    case 'expedition': if (startExpedition(arg)) closeModal(); return;
+    case 'export': {
+      $('savebox').innerHTML = `<textarea readonly rows="4">${exportSave()}</textarea><button class="primary wide" data-act="copy">Kopiér</button>`;
+      return;
+    }
+    case 'copy': {
+      const ta = document.querySelector('#savebox textarea');
+      ta.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(
+        () => toast('Gemmekoden er kopieret.', 'good'), () => { document.execCommand('copy'); toast('Gemmekoden er kopieret.', 'good'); });
+      return;
+    }
+    case 'import':
+      $('savebox').innerHTML = '<textarea rows="4" placeholder="Indsæt din gemmekode her"></textarea><button class="primary wide" data-act="doimport">Indlæs</button>';
+      return;
+    case 'doimport': {
+      const code = document.querySelector('#savebox textarea').value;
+      if (!code.trim()) return;
+      if (!confirm('Den nuværende koloni på denne enhed bliver erstattet. Fortsæt?')) return;
+      if (importSave(code)) { closeModal(); centerCamera(); toast('Kolonien er indlæst.', 'good'); }
+      else fail('Gemmekoden kunne ikke læses.');
+      return;
+    }
+    case 'install':
+      if (installPrompt) { installPrompt.prompt(); installPrompt = null; closeModal(); }
+      return;
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;

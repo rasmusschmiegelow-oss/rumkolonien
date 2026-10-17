@@ -33,6 +33,15 @@ const ITEMS = {
   latte:      { name: 'Mars-latte',   value: 90 },
   chilisauce: { name: 'Chilisauce',   value: 175 },
   vin:        { name: 'Mars-vin',     value: 220 },
+  // dyr og mejeri
+  foder:      { name: 'Foder',        value: 14 },
+  aeg:        { name: 'Æg',           value: 22 },
+  maelk:      { name: 'Mælk',         value: 30 },
+  ost:        { name: 'Ost',          value: 75 },
+  pandekage:  { name: 'Pandekager',   value: 110 },
+  // fund fra ekspeditioner (kan kun sælges)
+  krystal:    { name: 'Krystal',      value: 150 },
+  artefakt:   { name: 'Artefakt',     value: 500 },
 };
 
 // Afgrøder i drivhuskuplerne. Høst giver HARVEST_YIELD stk.
@@ -66,22 +75,75 @@ const RECIPES = {
   latte:      { in: { kaffe: 2, vand: 1 },              time: 90,  xp: 9,  level: 10 },
   chilisauce: { in: { chili: 3, tomat: 1 },             time: 240, xp: 15, level: 12 },
   vin:        { in: { druer: 3 },                       time: 600, xp: 30, level: 14 },
+  foder:      { in: { kartoffel: 2, alge: 1 },          time: 30,  xp: 2,  level: 3 },
+  ost:        { in: { maelk: 2 },                       time: 120, xp: 8,  level: 6 },
+  pandekage:  { in: { aeg: 1, maelk: 1, hvede: 1 },     time: 90,  xp: 9,  level: 6 },
 };
 
 const BUILDINGS = {
   isbor:         { name: 'Isbor',          level: 1,  cost: 40,   recipes: ['vand'] },
   madprinter:    { name: 'Madprinter',     level: 1,  cost: 60,   recipes: ['gryde', 'suppe'] },
   bioreaktor:    { name: 'Bioreaktor',     level: 2,  cost: 150,  recipes: ['ilt', 'braendstof'] },
-  bageri:        { name: 'Rumbageri',      level: 3,  cost: 300,  recipes: ['broed', 'pizza', 'taerte'] },
+  bageri:        { name: 'Rumbageri',      level: 3,  cost: 300,  recipes: ['broed', 'pizza', 'taerte', 'pandekage'] },
+  foderfabrik:   { name: 'Foderfabrik',    level: 3,  cost: 200,  recipes: ['foder'] },
+  mejeri:        { name: 'Mejeri',         level: 6,  cost: 600,  recipes: ['ost'] },
   mine:          { name: 'Mine',           level: 6,  cost: 450,  recipes: ['jern'] },
   skjold:        { name: 'Stormskjold',    level: 6,  cost: 500,  recipes: [], desc: 'Beskytter kuplerne mod støvstorme.' },
   batterifabrik: { name: 'Batterifabrik',  level: 7,  cost: 700,  recipes: ['batteri'] },
   tekstil:       { name: 'Tekstilfabrik',  level: 8,  cost: 900,  recipes: ['stof', 'rumdragt'] },
   kaffebar:      { name: 'Kaffebar',       level: 10, cost: 1200, recipes: ['latte'] },
   krydderilab:   { name: 'Krydderilab',    level: 12, cost: 1600, recipes: ['chilisauce'] },
+  garage:        { name: 'Rovergarage',    level: 7,  cost: 1000, recipes: [], garage: true, desc: 'Send roveren på ekspedition efter krystaller og artefakter.' },
   vinkaelder:    { name: 'Vinkælder',      level: 14, cost: 2500, recipes: ['vin'] },
 };
 const QUEUE_MAX = 3;
+
+// Bygningsopgraderinger: hvert niveau giver én plads mere i køen og 15 % hurtigere produktion.
+const UPGRADE_MAX = 3;
+const upgradeCost = (b, lvl) => ({ credits: Math.round(b.cost * 1.5 * lvl), jern: lvl === 1 ? 4 : 10 });
+const queueMax = (tile) => QUEUE_MAX + ((tile.lvl || 1) - 1);
+const speedOf = (tile) => 1 - 0.15 * ((tile.lvl || 1) - 1);
+
+// Dyr bor i indhegninger med plads til 3. De skal fodres for at give noget.
+const ANIMALS = {
+  hoensehus: { name: 'Hønsehus',  animal: 'hone', animalName: 'Rumhøns',   product: 'aeg',   time: 90,  level: 3, cost: 250, xp: 3 },
+  gedestald: { name: 'Gedestald', animal: 'ged',  animalName: 'Marsgeder', product: 'maelk', time: 180, level: 5, cost: 500, xp: 5 },
+};
+const PEN_SIZE = 3;
+
+// Ekspeditioner med roveren. loot: [vare, min, maks, chance]
+const EXPEDITIONS = [
+  { id: 'gale',    name: 'Gale-krateret',    level: 7,  time: 5 * 60,  cost: { braendstof: 2, gryde: 2 },
+    desc: 'Et gammelt søbund tæt på kolonien.',      loot: [['jern', 3, 6, 1], ['krystal', 1, 1, 0.35]] },
+  { id: 'valles',  name: 'Valles Marineris', level: 9,  time: 15 * 60, cost: { braendstof: 3, pizza: 1, batteri: 1 },
+    desc: 'Solsystemets største kløft.',             loot: [['jern', 2, 4, 1], ['krystal', 1, 2, 1], ['artefakt', 1, 1, 0.3]] },
+  { id: 'olympus', name: 'Olympus Mons',     level: 11, time: 30 * 60, cost: { braendstof: 5, rumdragt: 1 },
+    desc: 'Den højeste vulkan i solsystemet.',       loot: [['krystal', 2, 4, 1], ['artefakt', 1, 1, 0.65]] },
+];
+
+// Medaljer: test() kører løbende, og belønningen udbetales første gang den er sand.
+const MEDALS = [
+  { id: 'h1',    name: 'Første høst',        desc: 'Høst din første afgrøde.',            test: () => S.stats.harvest >= 1,   reward: 20 },
+  { id: 'h100',  name: 'Grøn finger',        desc: 'Høst 100 gange.',                      test: () => S.stats.harvest >= 100, reward: 150 },
+  { id: 'h500',  name: 'Mars-landmand',      desc: 'Høst 500 gange.',                      test: () => S.stats.harvest >= 500, reward: 500 },
+  { id: 'd10',   name: 'Fragtfører',         desc: 'Lever 10 ordrer.',                     test: () => S.stats.deliver >= 10,  reward: 80 },
+  { id: 'd50',   name: 'Handelsstation',     desc: 'Lever 50 ordrer.',                     test: () => S.stats.deliver >= 50,  reward: 250 },
+  { id: 'd200',  name: 'Rumhavn',            desc: 'Lever 200 ordrer.',                    test: () => S.stats.deliver >= 200, reward: 800 },
+  { id: 'p50',   name: 'Fabriksarbejder',    desc: 'Producér 50 varer.',                   test: () => S.stats.produce >= 50,  reward: 120 },
+  { id: 'p250',  name: 'Industrimagnat',     desc: 'Producér 250 varer.',                  test: () => S.stats.produce >= 250, reward: 500 },
+  { id: 'l5',    name: 'Nybygger',           desc: 'Nå niveau 5.',                         test: () => S.level >= 5,   reward: 100 },
+  { id: 'l10',   name: 'Pioner',             desc: 'Nå niveau 10.',                        test: () => S.level >= 10,  reward: 400 },
+  { id: 'l15',   name: 'Koloniborgmester',   desc: 'Nå niveau 15.',                        test: () => S.level >= 15,  reward: 1000 },
+  { id: 'dome',  name: 'Kuppelby',           desc: 'Hav 12 drivhuskupler.',                test: () => S.tiles.filter((t) => t.t === 'plot').length >= 12, reward: 200 },
+  { id: 'pen',   name: 'Dyreven',            desc: 'Byg din første indhegning.',           test: () => S.tiles.some((t) => t.t === 'pen'), reward: 80 },
+  { id: 'robot', name: 'Automatiseret',      desc: 'Køb en robot.',                        test: () => S.robots.hoster || S.robots.pakker, reward: 100 },
+  { id: 'up',    name: 'Ingeniørkunst',      desc: 'Opgradér en bygning til niveau 3.',    test: () => S.tiles.some((t) => t.lvl >= 3), reward: 300 },
+  { id: 'story', name: 'God nabo',           desc: 'Hør en kolonists hele historie.',      test: () => Object.keys(COLONISTS).some((k) => S.story[k] >= COLONISTS[k].lines.length), reward: 250 },
+  { id: 'exp1',  name: 'Opdagelsesrejsende', desc: 'Gennemfør en ekspedition.',            test: () => S.stats.expeditions >= 1,  reward: 100 },
+  { id: 'exp10', name: 'Marsforsker',        desc: 'Gennemfør 10 ekspeditioner.',          test: () => S.stats.expeditions >= 10, reward: 500 },
+  { id: 'art',   name: 'Arkæolog',           desc: 'Find et artefakt.',                    test: () => S.stats.artefakter >= 1, reward: 300 },
+  { id: 'rich',  name: 'Kreditkonge',        desc: 'Hav 10.000 kreditter på én gang.',     test: () => S.credits >= 10000, reward: 500 },
+];
 
 const ROBOTS = {
   hoster: { name: 'Høsterobot', level: 5, cost: 400, items: {},
@@ -94,6 +156,7 @@ const ROBOTS = {
 const PERKS = {
   3: 'Ekspresordrer med dobbelt belønning',
   4: 'Begivenheder: støvstorme og meteorregn',
+  6: 'Bygningsopgraderinger: flere pladser i køen og hurtigere produktion',
   11: 'Flere ordrepladser',
   15: 'Titlen Koloniborgmester 🏅 og 1000 kreditter',
 };

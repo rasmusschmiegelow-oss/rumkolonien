@@ -1,0 +1,18 @@
+<svg width="96" height="96" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" style="display: inline-block">
+  <path d="M8 70l40 20 40-20-40-20z" fill="#9CB86A" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <path d="M30 74l2-4M58 76l2-4M64 66l2-4M38 64l2-4" fill="none" stroke="#7A9A4A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g>
+    <path d="M26 50l22-11 22 11V32L48 21 26 32z" fill="#D9302C" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M22 34l26-18 26 18-26-13z" fill="#9AA1AD" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M42 44l6-3 6 3v-10l-6-3-6 3z" fill="#FFFFFF" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M42 34l12 6M54 34l-12 6" fill="none" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g>
+    <path d="M8 70v-8M28 80v-8M48 90v-8M68 80v-8M88 70v-8" fill="none" stroke="#2A1A14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M8 64l40 20 40-20" fill="none" stroke="#2A1A14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M8 66l40 20 40-20" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M8 62l18-9M88 62l-18-9" fill="none" stroke="#2A1A14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

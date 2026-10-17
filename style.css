@@ -264,3 +264,24 @@ details.people summary::-webkit-details-marker { display: none; }
   .sheet { padding: 14px; }
   .colonist .ic-xl { width: 56px; height: 56px; }
 }
+
+/* ---------- Version 3 ---------- */
+.medals { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.medal {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
+  background: #fff; border: 2.5px dashed #C8B6A6; border-radius: 14px; padding: 10px 8px;
+}
+.medal .ic-l { filter: grayscale(1); opacity: .35; }
+.medal b { font-size: 14px; }
+.medal small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.medal .rw { margin-top: 4px; font-weight: 700; }
+.medal.got { border: 2.5px solid var(--line); background: #FFF6DC; }
+.medal.got .ic-l { filter: none; opacity: 1; }
+.stars { display: flex !important; gap: 2px; }
+.stars span { opacity: .25; }
+.stars span.on { opacity: 1; }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+#savebox textarea {
+  width: 100%; margin-top: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace; padding: 8px;
+  border: 2.5px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); resize: vertical;
+}

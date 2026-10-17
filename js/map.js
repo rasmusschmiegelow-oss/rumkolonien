@@ -111,7 +111,7 @@ function drawGround(idx) {
   if (t.t !== 'locked') {
     ctx.strokeStyle = '#2A1A1418'; ctx.lineWidth = 1; ctx.stroke();
   }
-  if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad') {
+  if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad' && t.t !== 'pen') {
     ctx.fillStyle = '#00000022';
     ctx.beginPath(); ctx.ellipse(x + (hash(idx + 7) - 0.5) * 30, y + (hash(idx + 8) - 0.5) * 10, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -198,8 +198,47 @@ function drawTile(idx, now, t) {
     // Kuplen tegnes lidt fladere end ikonet, så den ikke skjuler felterne bagved.
     const kp = SPRITES.kuppel;
     if (kp) { const w = 96 * SPRITE_K * 0.92, h = w * 0.68; ctx.drawImage(kp.img, x - w / 2, y + 22 - h, w, h); }
+  } else if (tile.t === 'pen') {
+    const def = ANIMALS[tile.id];
+    drawSprite(ctx, tile.id, x, y, 96 * SPRITE_K, foot);
+    tile.animals.forEach((a, k) => {
+      const hungry = !a.end, ready = a.end && a.end <= t;
+      // dyrene går lidt rundt i indhegningen; sultne dyr står stille
+      const sp = hungry ? 0 : 1;
+      const ax = x + [-18, 4, 20][k] + Math.sin(now / 1400 + k * 2.1) * 8 * sp;
+      const ay = y + [2, 12, -2][k] + Math.cos(now / 1700 + k * 1.3) * 4 * sp;
+      const flip = Math.cos(now / 1400 + k * 2.1) * sp < 0;
+      ctx.save();
+      if (flip) { ctx.translate(ax * 2, 0); ctx.scale(-1, 1); }
+      drawSprite(ctx, def.animal, ax, ay + (ready ? Math.sin(now / 200 + k) * 1.5 : 0), 30, 58);
+      ctx.restore();
+      if (ready) drawSprite(ctx, def.product, ax, ay - 30 + Math.sin(now / 300 + k) * 2, 20, 32);
+      else if (hungry) {
+        ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(ax + 8, ay - 30, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        drawSprite(ctx, 'foder', ax + 8, ay - 30, 15);
+      }
+    });
+    const ready = penReady(tile, t);
+    if (ready) badge(x + 30, y - 40, String(ready));
+    const busy = tile.animals.filter((a) => a.end > t);
+    if (busy.length && !ready) {
+      const a = busy.reduce((p, q) => (q.end < p.end ? q : p));
+      progressBar(x, y + 22, (t - a.start) / (a.end - a.start), '#F3E6CF');
+    }
+  } else if (tile.t === 'b' && BUILDINGS[tile.id].garage) {
+    drawSprite(ctx, tile.id, x, y, 96 * SPRITE_K, foot);
+    const ex = S.expedition;
+    if (!ex) drawSprite(ctx, 'rover', x + 22, y + 10, 34, 58);
+    else if (t < ex.end) progressBar(x, y + 16, (t - ex.start) / (ex.end - ex.start), '#8E4FC2');
+    else {
+      drawSprite(ctx, 'rover', x + 22, y + 10, 34, 58);
+      drawSprite(ctx, 'krystal', x, y - 78 + Math.sin(now / 300) * 3, 30, 32);
+      badge(x + 30, y - 66, '!');
+    }
   } else if (tile.t === 'b') {
     drawSprite(ctx, tile.id, x, y, 96 * SPRITE_K, foot);
+    for (let k = 1; k < (tile.lvl || 1); k++) drawSprite(ctx, 'xp', x - 46 + k * 14, y + 26, 16);
     const done = tile.queue.filter((q) => q.end <= t).length;
     const cur = tile.queue.find((q) => q.end > t && q.start <= t);
     if (cur) {
@@ -277,7 +316,7 @@ function drawNight(light, phase) {
   if (dark > 0.2) {
     ctx.globalCompositeOperation = 'lighter';
     S.tiles.forEach((tile, idx) => {
-      if (tile.t !== 'plot' && tile.t !== 'b' && tile.t !== 'pad') return;
+      if (tile.t !== 'plot' && tile.t !== 'b' && tile.t !== 'pad' && tile.t !== 'pen') return;
       const [x, y] = tileCenter(idx);
       const col = tile.t === 'plot' ? '127,214,143' : tile.t === 'pad' ? '255,122,26' : '255,200,120';
       const g = ctx.createRadialGradient(x, y - 24, 4, x, y - 24, 62);
@@ -401,7 +440,7 @@ function findWork(a) {
   S.tiles.forEach((tile, i) => {
     const ok = a.id === 'hoster'
       ? tile.t === 'plot' && tile.crop && t >= tile.end
-      : tile.t === 'b' && tile.queue.some((q) => q.end <= t);
+      : (tile.t === 'b' && tile.queue && tile.queue.some((q) => q.end <= t)) || (tile.t === 'pen' && penReady(tile, t) > 0);
     if (!ok) return;
     const [x, y] = tileCenter(i);
     const d = Math.hypot(x - a.x, y - a.y);
@@ -423,7 +462,8 @@ function updateAgents(dt) {
     const speed = a.fly ? 160 : 110;
     if (d < 4) {
       if (a.target >= 0) {
-        const ok = a.id === 'hoster' ? robotHarvest(a.target) : collect(a.target, true) > 0;
+        const tt = S.tiles[a.target];
+        const ok = a.id === 'hoster' ? robotHarvest(a.target) : tt.t === 'pen' ? collectPen(a.target, true) > 0 : collect(a.target, true) > 0;
         a.target = -1;
         a.wait = ok ? 0.4 : 3; // fuldt lager: vent lidt
       }
@@ -490,6 +530,7 @@ canvas.addEventListener('pointermove', (e) => {
       drag.mode = 'harvest'; harvest(drag.start);
     } else if (tile && tile.t === 'plot' && !tile.crop && S.lastCrop && plant(drag.start, S.lastCrop, true)) {
       drag.mode = 'plant';
+      Sound.play('plant');
     } else {
       drag.mode = 'pan';
     }
@@ -501,7 +542,7 @@ canvas.addEventListener('pointermove', (e) => {
     if (idx >= 0 && idx !== drag.last) {
       drag.last = idx;
       if (drag.mode === 'harvest') harvest(idx, true);
-      else plant(idx, S.lastCrop, true);
+      else if (plant(idx, S.lastCrop, true)) Sound.play('plant');
     }
   }
 });
