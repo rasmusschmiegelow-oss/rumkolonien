@@ -52,7 +52,7 @@ function startArcade() {
           bits.push({ x: a.x, y: a.y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v, life: 0.6, c: a.gold ? '#B17FDB' : '#B89A88' });
         }
         bits.push({ x: a.x, y: a.y, vx: 0, vy: -40, life: 0.8, text: '+' + pts });
-        Sound.play(a.gold ? 'coin' : 'pickup');
+        Sound.play('boom', { gap: 0 }); if (a.gold) Sound.play('gold');
         document.getElementById('arcScore').textContent = score;
         return;
       }
@@ -107,7 +107,7 @@ function startArcade() {
       done = true;
       const record = score > S.arcade.best;
       const r = arcadeReward(score, golden);
-      Sound.play('level');
+      Sound.play('arcade');
       setTimeout(() => {
         showModal(`${icon('joystick')} Godt skudt!`, `
           <div class="levelup"><div class="big-num">${score}</div><p>point${record ? ' · ny rekord!' : ''}</p>

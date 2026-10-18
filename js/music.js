@@ -1,5 +1,5 @@
 'use strict';
-// Stille ambient-musik, der genereres i browseren. Om dagen spilles en lys
+// Stille ambient-musik, der genereres i browseren og spilles gennem lydens musikkanal. Om dagen spilles en lys
 // lydisk skala, om natten en dybere dorisk. Starter først efter et tryk.
 
 const Music = (() => {
@@ -16,9 +16,8 @@ const Music = (() => {
 
   function init() {
     if (ac) return true;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return false;
-    ac = new AC();
+    ac = Sound.context();
+    if (!ac) return false;
     master = ac.createGain();
     master.gain.value = 0;
     // enkel rumklang: to forsinkelser med feedback
@@ -27,7 +26,7 @@ const Music = (() => {
     const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
     verb.connect(lp).connect(fb).connect(verb);
     lp.connect(master);
-    master.connect(ac.destination);
+    master.connect(Sound.bus('music'));
     return true;
   }
 
@@ -73,7 +72,6 @@ const Music = (() => {
 
   function start() {
     if (!on || !init()) return;
-    if (ac.state === 'suspended') ac.resume();
     if (timer) return;
     nextBar = ac.currentTime + 0.1;
     master.gain.cancelScheduledValues(ac.currentTime);

@@ -837,7 +837,7 @@ canvas.addEventListener('pointermove', (e) => {
     const idx = pickTile(x, y);
     if (idx >= 0 && idx !== drag.last) {
       drag.last = idx;
-      if (drag.mode === 'harvest') harvest(idx, true);
+      if (drag.mode === 'harvest') { if (harvest(idx, true)) { Sound.harvest(); Sound.buzz(6); } }
       else if (plant(idx, S.lastCrop, true)) Sound.play('plant');
     }
   }

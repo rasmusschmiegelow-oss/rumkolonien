@@ -25,7 +25,7 @@ function showModal(title, html, view) {
   modal.hidden = false;
   modalView = view || null;
 }
-function closeModal() { modal.hidden = true; modalView = null; }
+function closeModal() { if (!modal.hidden) Sound.play('close'); modal.hidden = true; modalView = null; Sound.hush(); }
 
 function toast(html, kind = '', ms = 2800) {
   const el = document.createElement('div');
@@ -374,12 +374,36 @@ function openPop() {
     <p class="muted small">Landingsfartøjet holder de første ${POP_BASE} i live. Hvert habitat giver plads til ${POP_PER_HABITAT} mere. Hver kolonist ud over de første 4 gør produktionen 1 % hurtigere (højst 20 %). Næste sol om <span data-until="${nextSol}"></span>.</p>`);
 }
 
+// Lyd: fire skydere og lydløs.
+const SOUND_SLIDERS = [
+  ['music', 'Musik', 'musik'], ['sfx', 'Effekter', 'sound'], ['amb', 'Vind og maskiner', 'storm'], ['voice', 'Kolonisternes stemmer', 'col-ida'],
+];
+function openSound() {
+  const v = Sound.vol;
+  showModal(`${icon('sound')} Lyd`, `
+    <div class="sliders">${SOUND_SLIDERS.map(([k, name, ic]) => `
+      <label class="slider"><span>${icon(ic, 'ic-s')} ${name}</span>
+      <input type="range" min="0" max="100" step="5" value="${Math.round(v[k] * 100)}" data-vol="${k}" aria-label="${name}"></label>`).join('')}
+    </div>
+    <p class="muted">Lydeffekter og jingler: Kenney.nl (CC0). Stemmer lavet med ElevenLabs.</p>
+    <button class="wide" data-act="soundmute">${Sound.muted ? 'Slå lyden til' : 'Slå al lyd fra'}</button>`);
+  const voiceIds = Object.keys(COLONISTS).filter((k) => COLONISTS[k].level <= S.level);
+  $('modalBody').querySelectorAll('[data-vol]').forEach((el) => {
+    el.addEventListener('input', () => Sound.setVol(el.dataset.vol, el.value / 100));
+    el.addEventListener('change', () => {
+      if (el.dataset.vol === 'sfx') Sound.play('coin');
+      if (el.dataset.vol === 'voice') Sound.say(voiceIds[Math.floor(Math.random() * voiceIds.length)] + '_hej', { force: true });
+    });
+  });
+}
+
 function showFragment(i) {
   const f = MYSTERY[i];
   showModal(`${icon('fragment')} Fragment ${i + 1} af ${MYSTERY.length}`, `
     <div class="colonist"><div class="portrait">${icon('col-' + f.who, 'ic-xl')}</div><div class="col-body"><b>${COLONISTS[f.who].name}</b><p class="quote big">“${f.text}”</p></div></div>
     ${i + 1 >= MYSTERY.length ? '<p><b>Alle fragmenter er afkodet.</b> Nu kan du bygge Monolitten på et ryddet felt.</p>' : ''}
     <button class="primary wide" data-act="close">Videre</button>`);
+  Sound.say('mys' + i, { force: true });
 }
 
 function openMonolith() {
@@ -389,6 +413,7 @@ function openMonolith() {
     <p class="quote big">“${MONOLITH_DONE}”</p>
     <div class="terra-now"><b>Tidsbølgen</b><small>Én gang i døgnet kan Monolitten gøre alle afgrøder modne og alle bygninger og dyr færdige på én gang.</small></div>
     <button class="primary wide" data-act="timewave" ${used ? 'disabled' : ''}>${used ? `Klar igen om <span data-until="${tomorrow.getTime()}"></span>` : 'Udløs tidsbølgen'}</button>`);
+  Sound.say('monolit', { cooldown: 10 * 60000 });
 }
 
 function orderCard(o, i) {
@@ -408,6 +433,7 @@ function openOrders() {
   let col = '';
   if (S.colonist) {
     const c = S.colonist, def = COLONISTS[c.id], ok = canFulfil(c);
+    Sound.say(c.id + '_hej', { cooldown: 5 * 60000 });
     col = `<div class="colonist ${ok ? 'ready' : ''}">
       <div class="portrait">${icon('col-' + c.id, 'ic-xl')}</div>
       <div class="col-body">
@@ -949,11 +975,12 @@ document.addEventListener('click', (e) => {
     case 'colony': Sound.play('click'); return openColony();
     case 'help': Sound.play('click'); return openHelp();
     case 'tab': Sound.play('click'); return openColony(arg);
-    case 'sound': {
+    case 'sound': return openSound();
+    case 'soundmute': {
       const m = Sound.toggle();
-      btn.innerHTML = icon(m ? 'mute' : 'sound');
+      $('soundBtn').innerHTML = icon(m ? 'mute' : 'sound');
       if (!m) Sound.play('click');
-      return;
+      return openSound();
     }
     case 'plant': if (plant(idx, arg)) closeModal(); return;
     case 'make': if (enqueue(idx, arg)) refreshBuilding(idx); return;
@@ -1063,7 +1090,7 @@ document.addEventListener('click', (e) => {
     case 'photoshare': return sharePhoto();
     case 'phobos':
       if (confirm('Vil du forlade Mars og starte en ny koloni på Phobos? Kortet, lageret og bygningerne starter forfra.')) {
-        if (startPhobos()) { closeModal(); resetAgents(); centerCamera(); Sound.play('whoosh'); Sound.play('level'); toast(`${icon('phobos')} Velkommen til Phobos! Du har nu ${S.prestige} ${S.prestige === 1 ? 'stjerne' : 'stjerner'}.`, 'good', 5000); }
+        if (startPhobos()) { closeModal(); resetAgents(); centerCamera(); Sound.play('whoosh'); Sound.play('levelup'); Sound.say('kim_phobos', { force: true }); toast(`${icon('phobos')} Velkommen til Phobos! Du har nu ${S.prestige} ${S.prestige === 1 ? 'stjerne' : 'stjerner'}.`, 'good', 5000); }
       }
       return;
     case 'postsell': return postSell();

@@ -430,3 +430,9 @@ button.stat.clock { cursor: pointer; font: inherit; font-size: 13px; font-weight
 .row.myst .ic-l { flex: none; }
 .journal-box { margin-top: 6px; }
 .journal-box summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+
+/* Lyd: skydere */
+.sliders { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 12px; }
+.slider { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.slider span { display: flex; align-items: center; gap: 6px; }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }

@@ -71,6 +71,15 @@ Version 8 skal gøre Rumkolonien til et spil om at overleve og forvandle en frem
 - **Mars-mysteriet:** Artefakter afkodes i labbet til seks fragmenter af et signal fra "De Første". Når historien er fortalt, kan du bygge Monolitten. Én gang i døgnet sender den en Tidsbølge, der gør alt færdigt.
 - **Befolkning og livsstøtte:** Landingsfartøjet holder 4 kolonister i live. Habitater giver plads til flere, som skal have ilt og mad hver sol. Hvis alle får det, de skal bruge, stiger moralen, og nye flytter ind. Flere kolonister giver hurtigere produktion. Ingen dør, men lav moral gør kolonien langsommere.
 
+### Nyt i version 9: lyd
+
+- **Rigtige lydeffekter:** Over 50 lyde fra Kenneys CC0-pakker afløser de syntetiske bip. Hver handling har sin egen lyd med lidt variation i tonehøjde, så den ikke bliver ensformig.
+- **Høst i træk:** Når du trækker fingeren hen over kuplerne, stiger tonen for hver afgrøde, du høster.
+- **Jingler** for nyt niveau, medaljer, missioner, forskning, moderskibet, opgraderinger og Mars-mysteriet. Musikken dæmpes, mens de spiller.
+- **Stemmer:** Ida, Bo, Kim og Dina siger hej, takker og jubler. Ida advarer om støvstorme, og Kim melder, når moderskibet kommer. De seks fragmenter i Mars-mysteriet bliver læst op. Stemmerne er lavet med ElevenLabs via Higgsfield.
+- **Kulisse:** Marsvinden blæser hele tiden. Den bliver stærkere om natten, om vinteren og i storme med torden. Bygninger, der arbejder tæt på midten af skærmen, summer. Laboratoriet bipper, mens det forsker, og høns og geder giver lyd fra sig.
+- **Lydindstillinger:** Højttaleren øverst åbner skydere for musik, effekter, kulisse og stemmer og en knap, der slår al lyd fra.
+
 ### Sky og ranglister (Supabase)
 
 - **Sky-gemning:** Kolonien gemmes automatisk i Supabase hvert minut, og når appen lukkes. Under **?** finder du dit hemmelige link. Åbn det på en anden telefon eller computer for at spille videre der. Har en anden enhed gemt en nyere udgave, spørger spillet, hvilken du vil beholde.
@@ -100,9 +109,10 @@ python3 -m http.server 8000
 | `js/state.js` | Spilregler, gemning og alle handlinger |
 | `js/map.js` | Isometrisk kort, kamera, input, dag/nat, vejr og robotter |
 | `js/ui.js` | HUD, dialoger og beskeder |
-| `js/audio.js` | Lydeffekter med Web Audio |
+| `js/audio.js` | Lydmotor: effekter, jingler, stemmer, kulisse og styrke pr. kanal |
+| `assets/sfx/`, `assets/voice/` | Lydeffekter (Kenney.nl, CC0) og kolonisternes stemmer |
 | `js/sprites.js` | Indlæsning af SVG-grafikken |
-| `js/music.js` | Genereret ambient-musik til dag og nat |
+| `js/music.js` | Genereret ambient-musik til dag og nat (via musikkanalen) |
 | `js/arcade.js` | Minispillet Asteroidejagt |
 | `js/notify.js` | Beskeder og tal på app-ikonet |
 | `js/cloud.js` | Sky-gemning og ranglister i Supabase |

@@ -115,6 +115,12 @@ function unlocksAt(lvl) {
   return out;
 }
 
+// En af de kolonister, man har mødt, jubler, når kolonien stiger i niveau.
+function cheer() {
+  const ids = Object.keys(COLONISTS).filter((k) => COLONISTS[k].level <= S.level);
+  if (ids.length) setTimeout(() => Sound.say(ids[Math.floor(Math.random() * ids.length)] + '_hurra'), 1700);
+}
+
 function addXP(n) {
   S.xp += n;
   while (S.xp >= xpNeeded(S.level)) {
@@ -124,7 +130,7 @@ function addXP(n) {
     earn(bonus);
     if (S.level === 15) S.mayor = true;
     if (S.level === 4 && !S.event.nextAt) S.event.nextAt = Date.now() + 3 * 60 * 1000;
-    Sound.play('level');
+    Sound.play('levelup'); cheer();
     showLevelUp(S.level, bonus, unlocksAt(S.level));
     fillOrders();
   }
@@ -195,7 +201,7 @@ function deliver(i) {
   addXP(o.xp);
   launchShip();
   Sound.play('whoosh');
-  Sound.play('coin');
+  Sound.play('cash');
   Sound.buzz(20);
   toast(`Ordre leveret: +${pay} ${icon('coin')} +${o.xp} ${icon('xp')}`, 'good');
   save();
@@ -246,7 +252,7 @@ function harvest(idx, auto) {
   floatItems(idx, [[crop, n]]);
   burst(idx, '#7FD68F');
   Object.assign(tile, { crop: null, start: 0, end: 0 });
-  if (!auto) { Sound.play('plop'); Sound.buzz(8); }
+  if (!auto) { Sound.harvest(); Sound.buzz(8); }
   save();
   return true;
 }
@@ -349,13 +355,13 @@ function clearTile(idx) {
     addItem('artefakt', 1); addItem('krystal', 2);
     S.stats.artefakter++;
     floatItems(idx, [['artefakt', 1], ['krystal', 2]]);
-    Sound.play('level');
+    Sound.play('level'); Sound.play('glass');
     toast(`${icon('ruin')} Du fandt et artefakt og 2 krystaller i ruinen!`, 'good', 4000);
   } else if (sp) {
     toast(`${icon(SPECIALS[sp].sprite)} ${SPECIALS[sp].name}! ${SPECIALS[sp].desc}`, 'good', 4500);
   } else if (spaceFor(1) && Math.random() < 0.6) { addItem('jern', 1); floatItems(idx, [['jern', 1]]); }
   burst(idx, '#B89A88');
-  Sound.play('build');
+  Sound.play('clear');
   save();
   return true;
 }
@@ -437,7 +443,7 @@ function deliverColonist() {
   addWeek(1);
   S.stats.deliver++;
   track('deliver', 1);
-  Sound.play('coin');
+  Sound.play('cash'); Sound.say(c.id + '_tak', { force: true });
   Sound.buzz(20);
   save();
   return { id: c.id, credits: pay, xp: c.xp, chapter };
@@ -530,7 +536,7 @@ function startEvent(type, now = Date.now()) {
       S.tiles.forEach((t) => { if (t.t === 'plot' && t.crop && t.end > now) t.end += 45000; });
       toast(`${icon('storm')} Støvstorm! Afgrøderne gror langsommere. Et stormskjold kan beskytte dem.`, 'bad', 4500);
     }
-    Sound.play('storm');
+    Sound.play('storm'); if (type === 'storm') Sound.say('ida_storm');
   } else {
     ev.until = now + METEOR_MS;
     const spots = S.tiles.map((t, i) => i).filter((i) => S.tiles[i].t === 'empty' || S.tiles[i].t === 'locked');
@@ -601,7 +607,7 @@ function collectPen(idx, auto) {
     addXP(def.xp * n);
     floatItems(idx, [[def.product, n]]);
     burst(idx, '#F3E6CF');
-    if (!auto) Sound.play('pickup');
+    if (!auto) { Sound.play('pickup'); Sound.play(def.animal); }
     save();
   }
   return n;
@@ -649,7 +655,7 @@ function upgradeBuilding(idx) {
   addItem('jern', -c.jern);
   tile.lvl = lvl + 1;
   burst(idx, '#F5C243');
-  Sound.play('level');
+  Sound.play('upgrade');
   toast(`${icon(tile.id)} ${b.name} er nu niveau ${tile.lvl}: ${queueMax(tile)} pladser i køen og ${Math.round((1 - speedOf(tile)) * 100)} % hurtigere.`, 'good', 4000);
   save();
   return true;
@@ -662,7 +668,7 @@ function startExpedition(id) {
   for (const [it, q] of Object.entries(e.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(e.cost)) addItem(it, -q);
   S.expedition = { id, start: Date.now(), end: Date.now() + e.time * (hasTech('rover') ? 0.6 : 1) * 1000 };
-  Sound.play('whoosh');
+  Sound.play('rover');
   toast(`${icon('rover')} Roveren kører mod ${e.name}.`, 'good');
   save();
   return true;
@@ -695,7 +701,7 @@ function medalTick() {
     if (S.medals[m.id] || !m.test()) continue;
     S.medals[m.id] = Date.now();
     earn(m.reward);
-    Sound.play('level');
+    Sound.play('medal');
     toast(`${icon('medalje')} Medalje: <b>${m.name}</b> · +${m.reward} ${icon('coin')}`, 'good', 4500);
     save();
   }
@@ -805,7 +811,7 @@ function shipTick(now) {
     }
     const total = crates.reduce((a, c) => a + c.credits, 0);
     S.ship = { crates, until: now + SHIP.stayMs, bonus: Math.round(total * 0.6), krystal: 1 + (S.level >= 9 ? 1 : 0) };
-    Sound.play('whoosh');
+    Sound.play('whoosh'); Sound.say('kim_skib');
     toast(`${icon('moderskib')} Moderskibet er ankommet! Fyld containerne ved landingspladsen.`, 'good', 4500);
     save();
   }
@@ -830,7 +836,7 @@ function loadCrate(i) {
     S.ship = null;
     S.shipNext = Date.now() + SHIP.gapMs;
     launchShip();
-    Sound.play('level');
+    Sound.play('ship');
     toast(`${icon('moderskib')} Alle containere er fyldt! Bonus: +${sh.bonus} ${icon('coin')} og ${sh.krystal} ${icon('krystal')}`, 'good', 5000);
   }
   save();
@@ -854,7 +860,7 @@ function startResearch(id) {
   for (const [it, q] of Object.entries(r.cost)) addItem(it, -q);
   S.credits -= r.credits;
   S.research.active = { id, start: Date.now(), end: Date.now() + r.time * 1000 };
-  Sound.play('build');
+  Sound.play('decode');
   save();
   return true;
 }
@@ -864,7 +870,7 @@ function researchTick(now) {
   if (!a || now < a.end) return;
   S.research.done[a.id] = true;
   S.research.active = null;
-  Sound.play('level');
+  Sound.play('research');
   toast(`${icon('lab')} Forskning færdig: <b>${RESEARCH[a.id].name}</b>. ${RESEARCH[a.id].desc}`, 'good', 5000);
   save();
 }
@@ -1054,7 +1060,7 @@ function claimMission() {
   addXP(Math.round(m.reward / 10));
   if (m.krystal) addItem('krystal', m.krystal);
   S.mission++;
-  Sound.play('level');
+  Sound.play('mission');
   const next = currentMission();
   const chapterDone = !next || next.ch !== m.ch;
   toast(`${icon('mission')} Mission klaret: +${m.reward} ${icon('coin')}${m.krystal ? ` og ${m.krystal} ${icon('krystal')}` : ''}${chapterDone && next ? ` · Nyt kapitel: ${MISSION_CHAPTERS[next.ch].title}` : ''}`, 'good', 4500);
@@ -1130,7 +1136,7 @@ function petTick(now) {
   if (!S.pet.next) { S.pet.next = now + 3 * 60 * 1000; return; }
   if (now >= S.pet.next) {
     S.pet.found = petFind();
-    Sound.play('pickup');
+    Sound.play('pet');
     save();
   }
 }
@@ -1273,7 +1279,7 @@ function startSector(i) {
   for (const [it, q] of Object.entries(trip.cost)) addItem(it, -q);
   const ms = trip.min * 60000 * (hasTech('rover') ? 0.6 : 1);
   S.expedition = { sector: i, start: Date.now(), end: Date.now() + ms };
-  Sound.play('whoosh');
+  Sound.play('rover');
   toast(`${icon('rover')} Roveren kører mod ${SECTORS[i].name}.`, 'good');
   save();
   return true;
@@ -1309,7 +1315,7 @@ function startDecode() {
   for (const [it, q] of Object.entries(DECODE.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(DECODE.cost)) addItem(it, -q);
   S.mystery.active = { start: Date.now(), end: Date.now() + DECODE.min * 60000 };
-  Sound.play('build');
+  Sound.play('decode');
   save();
   return true;
 }
@@ -1319,7 +1325,7 @@ function mysteryTick(now) {
   if (!a || now < a.end) return;
   S.mystery.active = null;
   S.mystery.n++;
-  Sound.play('level');
+  Sound.play('mystery');
   save();
   showFragment(S.mystery.n - 1);
 }
@@ -1335,7 +1341,7 @@ function timeWave() {
     if (t.t === 'pen') for (const a of t.animals) if (a.end > now) { a.start = (a.start || now) - (a.end - now); a.end = now; n++; }
   }
   S.timewave = today;
-  Sound.play('level'); Sound.play('whoosh');
+  Sound.play('mystery'); Sound.play('whoosh');
   save();
   return n;
 }

@@ -23,12 +23,31 @@ function loop(now) {
       lastSeason = seasonIndex(t);
     }
     researchTick(t);
+    Sound.ambience(soundscape(t));
   }
   updateAgents(dt);
   draw(now);
   updateHUD();
   if (modalView && now - lastModalTick > 500) { lastModalTick = now; modalView(); }
   requestAnimationFrame(loop);
+}
+
+// Hvad kulissen skal spille: vejr, tid på døgnet og det, der arbejder tæt på midten af skærmen.
+function soundscape(now) {
+  const st = { storm: S.event.type === 'storm' && S.event.until > now, night: solClock(now).night,
+    winter: season(now).id === 'vinter', machines: 0, lab: 0, animal: null };
+  let near = Infinity;
+  const reach = Math.max(viewW, viewH) * 0.55;
+  S.tiles.forEach((t, i) => {
+    if (t.t !== 'b' && t.t !== 'pen') return;
+    const [x, y] = toScreen(...tileCenter(i));
+    const d = Math.hypot(x - viewW / 2, y - viewH / 2), w = Math.max(0, 1 - d / reach);
+    if (!w) return;
+    if (t.t === 'pen') { if (t.animals.length && d < near) { near = d; st.animal = ANIMALS[t.id].animal; } return; }
+    if (t.queue && t.queue.some((q) => q.start <= now && q.end > now)) st.machines += w * 0.45;
+    if (t.id === 'lab' && S.research.active) st.lab = Math.max(st.lab, w);
+  });
+  return st;
 }
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; });

@@ -156,7 +156,7 @@ const Cloud = (() => {
       const r = await rpc('market_collect', { p_key: key });
       if (!r || !r.count) return 0;
       earn(r.credits); save();
-      Sound.play('coin');
+      Sound.play('cash');
       toast(`${icon('rumposten')} Du har solgt ${r.count} ${r.count === 1 ? 'annonce' : 'annoncer'} i Rumposten: +${r.credits} ${icon('coin')}`, 'good', 5000);
       return r.credits;
     } catch (e) { if (!quiet) toast('Rumposten kan ikke nås lige nu.', 'bad'); return 0; }
@@ -209,7 +209,7 @@ const Cloud = (() => {
         <div class="levelup"><div class="big-num">${place}.</div><p>plads med ${w.n} leverancer · ${prize.text}</p>
         <div class="unlocks"><span>${icon('coin')} +${prize.credits}</span>${prize.krystal ? `<span>${icon('krystal')} +${prize.krystal}</span>` : ''}</div>
         <button class="primary wide" data-act="close">Hent præmien</button></div>`);
-      Sound.play('level');
+      Sound.play('medal');
     } catch (e) { /* prøver igen næste gang */ }
   }
 
