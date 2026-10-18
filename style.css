@@ -26,6 +26,9 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  /* notch og hjemmeindikator på iPhone */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   opacity: 0;
   transition: opacity .3s;
 }

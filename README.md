@@ -99,6 +99,25 @@ Alle nye ikoner er tegnet i Paper på arket "Version 10".
 
 Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem funktioner: `save_colony`, `load_colony`, `submit_score`, `get_leaderboard`, `list_neighbors`, `visit_colony`, `help_colony`, `claim_gifts`, Rumpostens `market_*`-funktioner og `terraform_contribute`/`terraform_status`. Et besøg viser kun navn, niveau og kortet, aldrig lager eller kreditter. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
 
+## iOS-app
+
+Spillet pakkes som iOS-app med [Capacitor](https://capacitorjs.com). Koden er den samme som på hjemmesiden. `js/native.js` bruger telefonens egne funktioner, når spillet kører som app:
+
+- haptisk feedback med Taptic Engine
+- lokale notifikationer, der også kommer, når appen er lukket
+- lys tekst i statuslinjen og plads til notch og hjemmeindikator
+
+App-ikonet og splashskærmen er tegnet i Paper.
+
+Det kræver Xcode og Node.js. Byg og åbn projektet med:
+
+```bash
+npm install
+npm run ios
+```
+
+`npm run ios` kopierer spillets filer til `www/`, synkroniserer dem ind i `ios/` og åbner projektet i Xcode. Vælg en iPhone-simulator, og tryk på ▶︎. Til en rigtig iPhone, TestFlight og App Store skal du have en Apple Developer-konto.
+
 ## Grafik
 
 Alle ikoner er tegnet i [Paper](https://paper.design) som ét samlet sæt: SVG på et gitter på 64 × 64 (bygninger 96 × 96 isometrisk) med en kontur på 3 px. De ligger i `assets/icons/`.
@@ -121,6 +140,8 @@ python3 -m http.server 8000
 | `js/state.js` | Spilregler, gemning og alle handlinger |
 | `js/map.js` | Isometrisk kort, kamera, input, dag/nat, vejr og robotter |
 | `js/ui.js` | HUD, dialoger og beskeder |
+| `js/native.js` | Haptik, notifikationer og statuslinje i iOS-appen |
+| `ios/`, `capacitor.config.json` | Xcode-projektet til iOS-appen |
 | `js/colony.js` | Version 10: kolonirådet, gen-lab, specialister, livszonen og Marsvejr |
 | `js/audio.js` | Lydmotor: effekter, jingler, stemmer, kulisse og styrke pr. kanal |
 | `assets/sfx/`, `assets/voice/` | Lydeffekter (Kenney.nl, CC0) og kolonisternes stemmer |

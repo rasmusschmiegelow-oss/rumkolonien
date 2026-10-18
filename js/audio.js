@@ -283,7 +283,9 @@ const Sound = (() => {
     get vol() { return { ...vol }; },
     setVol,
     buzz(ms = 12) {
-      if (muted || !navigator.vibrate || !tapped) return;
+      if (muted || !tapped) return;
+      if (Native.haptic(ms)) return; // iPhone har ingen navigator.vibrate, men appen kan bruge Taptic Engine
+      if (!navigator.vibrate) return;
       try { navigator.vibrate(ms); } catch (e) { /* ikke understøttet */ }
     },
     toggle() {

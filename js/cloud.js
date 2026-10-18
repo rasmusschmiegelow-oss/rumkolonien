@@ -234,7 +234,7 @@ const Cloud = (() => {
     visit: (id) => rpc('visit_colony', { p_id: id }),
     help: (id) => rpc('help_colony', { p_key: key, p_id: id }),
     get key() { return key; },
-    get link() { return `${location.origin}${location.pathname}#koloni=${key}`; },
+    get link() { return `${Native.on ? Native.SITE : location.origin + location.pathname}#koloni=${key}`; },
     get status() { return status; },
     get lastOk() { return lastOk; },
     take() { if (offerNewer.data) { adopt(offerNewer.data); toast('Den nyeste koloni er hentet.', 'good'); } closeModal(); },

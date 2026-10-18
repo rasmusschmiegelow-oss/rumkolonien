@@ -1,0 +1,15 @@
+{
+  "appId": "com.rasmusschmiegelow.rumkolonien",
+  "appName": "Rumkolonien",
+  "webDir": "www",
+  "backgroundColor": "#120d1c",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#120d1c",
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 800, "backgroundColor": "#120d1c", "showSpinner": false },
+    "LocalNotifications": { "iconColor": "#FF7A1A" }
+  }
+}

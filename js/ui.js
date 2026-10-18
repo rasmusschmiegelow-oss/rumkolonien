@@ -967,7 +967,7 @@ function openHelp() {
     </div>
     <p class="muted small">Træk i kortet for at flytte det, og knib eller scroll for at zoome. Spillet gemmes i din browser.</p>
     <div class="section-title">Beskeder</div>
-    <p class="small">Få besked, når afgrøder, bygninger, roveren eller forskningen er klar. Det virker, mens spillet er åbent i baggrunden, og bedst når det er installeret som app.</p>
+    <p class="small">Få besked, når afgrøder, bygninger, roveren eller forskningen er klar. ${Native.on ? 'Beskederne kommer også, når appen er lukket.' : 'Det virker, mens spillet er åbent i baggrunden, og bedst når det er installeret som app.'}</p>
     <button data-act="notify" ${Notify.supported() ? '' : 'disabled'}>${icon('klokke', 'ic-s')} ${Notify.on ? 'Slå beskeder fra' : 'Giv mig besked'}</button>
     <div class="section-title">Din koloni i skyen</div>
     <p class="small">${cloudStatusText()} Åbn dit hemmelige link på en anden telefon eller computer for at spille videre der. Del det ikke med andre, for linket giver adgang til kolonien.</p>

@@ -1,6 +1,7 @@
 'use strict';
 // Beskeder, når noget bliver klar, mens spillet ligger i baggrunden, og et tal på app-ikonet.
-// Uden en server kan beskederne kun sendes, så længe browseren holder spillet i live.
+// I browseren kan beskederne kun sendes, så længe browseren holder spillet i live.
+// I iOS-appen planlægges de som lokale notifikationer, så de også kommer, når appen er lukket.
 
 const Notify = (() => {
   const KEY = 'rumkolonien-notify';
@@ -9,8 +10,11 @@ const Notify = (() => {
   let timers = [];
   let lastBadge = -1;
 
-  const supported = () => 'Notification' in window;
-  const allowed = () => supported() && Notification.permission === 'granted';
+  const LN = Native.notifications;
+  let nativeOk = false;
+  if (LN) LN.checkPermissions().then((p) => { nativeOk = p.display === 'granted'; }).catch(() => {});
+  const supported = () => !!LN || 'Notification' in window;
+  const allowed = () => (LN ? nativeOk : supported() && Notification.permission === 'granted');
 
   async function show(title, body) {
     const opts = { body, icon: 'assets/app-192.png', badge: 'assets/app-192.png', tag: title };
@@ -45,9 +49,21 @@ const Notify = (() => {
     return ev.sort((a, b) => a.at - b.at).slice(0, 8);
   }
 
-  function clear() { timers.forEach(clearTimeout); timers = []; }
+  const IDS = [1, 2, 3, 4, 5, 6, 7, 8];
+  function clear() {
+    timers.forEach(clearTimeout); timers = [];
+    if (LN) LN.cancel({ notifications: IDS.map((id) => ({ id })) }).catch(() => {});
+  }
 
   function schedule() {
+    if (LN) {
+      // først de gamle væk, så de nye ind
+      const now = Date.now();
+      const list = wanted && allowed() ? upcoming().filter((e) => e.at > now + 5000).map((e, i) => ({ id: IDS[i], title: e.title, body: e.body, schedule: { at: new Date(e.at + 1000) } })) : [];
+      LN.cancel({ notifications: IDS.map((id) => ({ id })) }).catch(() => {})
+        .then(() => (list.length ? LN.schedule({ notifications: list }) : null)).catch(() => {});
+      return;
+    }
     clear();
     if (!wanted || !allowed()) return;
     const now = Date.now();
@@ -65,6 +81,11 @@ const Notify = (() => {
     async toggle() {
       if (wanted && allowed()) {
         wanted = false;
+      } else if (LN) {
+        const p = await LN.requestPermissions().catch(() => ({ display: 'denied' }));
+        nativeOk = p.display === 'granted';
+        if (!nativeOk) return 'denied';
+        wanted = true;
       } else {
         if (!supported()) return false;
         const p = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
