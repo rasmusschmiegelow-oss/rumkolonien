@@ -50,6 +50,11 @@
         <button class="primary" id="visitHelp" data-act="helpnb">Hjælp</button><button data-act="leavevisit">Tilbage</button></div>
       <div id="eventBanner" class="banner bottom" hidden></div>
       <div id="editBanner" class="banner top edit" hidden><img class="ic" src="assets/icons/flyt.svg" alt=""> Tryk på noget for at vælge det, og tryk derefter, hvor det skal stå. <button class="primary" data-act="editdone">Færdig</button></div>
+      <div id="crewBanner" class="banner top edit" hidden><img class="ic" id="crewBannerIc" src="assets/icons/col-ida.svg" alt=""> <span id="crewBannerText"></span> <button data-act="crewcancel">Fortryd</button></div>
+      <div class="fab-left">
+        <button data-act="council" id="councilBtn" title="Kolonirådet" aria-label="Kolonirådet" hidden><img src="assets/icons/raad.svg" alt=""><span id="councilBadge" class="badge" hidden>1</span></button>
+        <button data-act="crew" id="crewBtn" title="Specialister" aria-label="Specialister" hidden><img src="assets/icons/col-bo.svg" alt=""></button>
+      </div>
       <div class="fab">
         <button data-act="arcade" id="arcadeBtn" title="Asteroidejagt" aria-label="Asteroidejagt" hidden><img src="assets/icons/joystick.svg" alt=""></button>
         <button data-act="photo" title="Tag et billede" aria-label="Tag et billede"><img src="assets/icons/kamera.svg" alt=""></button>
@@ -78,6 +83,7 @@
   <script src="js/music.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/state.js"></script>
+  <script src="js/colony.js"></script>
   <script src="js/map.js"></script>
   <script src="js/notify.js"></script>
   <script src="js/cloud.js"></script>

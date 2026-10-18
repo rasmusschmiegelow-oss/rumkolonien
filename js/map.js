@@ -493,6 +493,11 @@ function drawSnow(now) {
 
 function drawWeather(now) {
   drawSnow(now);
+  if (!visiting) {
+    ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFlare(now);
+    ctx.restore();
+  }
   const ev = S.event;
   if (!ev.type || now > ev.until) return;
   ctx.save();
@@ -515,6 +520,142 @@ function drawWeather(now) {
     }
   }
   ctx.restore();
+}
+
+// ---------- Version 10: livszonen ----------
+// Grøn jord: lav, mos og græs, der breder sig fra kuplerne.
+function drawLife() {
+  if (!S.life) return;
+  for (let i = 0; i < S.tiles.length; i++) {
+    const L = S.life[i];
+    if (L < 4 || S.tiles[i].t === 'locked') continue;
+    const [x, y] = tileCenter(i);
+    const k = L / 100;
+    ctx.fillStyle = `rgba(${Math.round(150 - 60 * k)}, ${Math.round(150 + 40 * k)}, ${Math.round(90 - 10 * k)}, ${0.12 + k * 0.4})`;
+    diamond(x, y, TW + 1, TH + 1); ctx.fill();
+    const t = S.tiles[i];
+    if (t.t !== 'empty') continue;
+    // tuer af lav og græs på de tomme felter
+    const n = Math.round(k * 9);
+    for (let j = 0; j < n; j++) {
+      const gx = x + (hash(i * 31 + j) - 0.5) * 60, gy = y + (hash(i * 17 + j * 3) - 0.5) * 24;
+      if (Math.abs(gx - x) / 30 + Math.abs(gy - y) / 12 > 1) continue;
+      ctx.fillStyle = j % 3 ? '#4CB86A' : '#7FD68F';
+      ctx.beginPath(); ctx.ellipse(gx, gy, 3.5, 2, 0, 0, Math.PI * 2); ctx.fill();
+      if (k > 0.6 && j % 2) { ctx.strokeStyle = '#3E9A57'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + 1, gy - 7); ctx.stroke(); }
+    }
+  }
+}
+
+// ---------- Version 10: specialister på deres post ----------
+function drawCrew(id, idx, now) {
+  const [x, y] = tileCenter(idx);
+  const t = S.tiles[idx];
+  const lift = t.t === 'b' ? 104 : t.t === 'pad' ? 92 : t.t === 'plot' ? 70 : 52;
+  const bob = Math.sin(now / 420 + idx) * 3;
+  const by = y - lift + bob, bx = x + 26;
+  const c = S.crew[id];
+  // talebobbel med portræt og en ring, der viser energien
+  ctx.fillStyle = '#00000022';
+  ctx.beginPath(); ctx.ellipse(bx, y - 2, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(bx, by, 19, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx - 5, by + 17); ctx.lineTo(bx, by + 26); ctx.lineTo(bx + 5, by + 17); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(bx - 6, by + 13, 12, 6);
+  drawSprite(ctx, 'col-' + id, bx, by, 32);
+  ctx.strokeStyle = c.energy < 30 ? '#D9302C' : '#5BB8F0'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(bx, by, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.02, c.energy / 100)); ctx.stroke();
+  ctx.lineCap = 'butt';
+  if (Math.random() < 0.04) particles.push({ x: bx + rand(-10, 10), y: by - 20, vx: 0, vy: -18, life: 0.7, color: id === 'bo' ? '#7FD68F' : id === 'ida' ? '#F5C243' : id === 'kim' ? '#5BB8F0' : '#FF9AB0', s: 2.5, puff: true });
+}
+
+// ---------- Version 10: støvdjævel ----------
+function drawDevil() {
+  const now = Date.now();
+  const d = devilPos(now);
+  if (!d) return;
+  const k = (now - d.t0) / DEVIL.ms;
+  const fade = Math.min(1, k * 6, (1 - k) * 6);
+  const H = 116, sway = (h) => Math.sin(now / 260 + h * 3) * (3 + h * 12);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  // skygge og støvsky ved foden
+  ctx.fillStyle = '#2A1A1430';
+  ctx.beginPath(); ctx.ellipse(d.x, d.y, 30, 10, 0, 0, Math.PI * 2); ctx.fill();
+  // tragten: smal ved jorden, bred foroven, og den svajer
+  const left = [], right = [];
+  for (let i = 0; i <= 10; i++) {
+    const h = i / 10, w = 6 + h * h * 30 + h * 8, y = d.y - 4 - h * H, x = d.x + sway(h);
+    left.push([x - w, y]); right.push([x + w, y]);
+  }
+  const g = ctx.createLinearGradient(0, d.y - H, 0, d.y);
+  g.addColorStop(0, 'rgba(240,190,140,0.92)'); g.addColorStop(1, 'rgba(200,98,58,0.95)');
+  ctx.fillStyle = g; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  left.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // lyse bånd, der snor sig opad
+  ctx.strokeStyle = 'rgba(255,226,196,0.85)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  for (let b = 0; b < 5; b++) {
+    const h = ((b / 5) + now / 1600) % 1;
+    const w = 6 + h * h * 30 + h * 8, y = d.y - 4 - h * H, x = d.x + sway(h);
+    ctx.beginPath(); ctx.ellipse(x, y, w * 0.8, 3 + h * 4, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+  // en gnist på toppen: den kan fanges
+  const sy = d.y - H - 14 + Math.sin(now / 200) * 4, sx = d.x + sway(1);
+  ctx.fillStyle = '#F5C243'; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) { const r = i % 2 ? 3 : 8, a = i * Math.PI / 4; ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  ctx.lineCap = 'butt';
+  if (Math.random() < 0.6) particles.push({ x: d.x + rand(-34, 34), y: d.y - rand(0, 30), vx: rand(-70, 70), vy: rand(-50, 0), life: 0.6, color: Math.random() < 0.5 ? '#E0A070' : '#9E4628', s: rand(1.5, 3.5), puff: true });
+}
+// Rammer et tryk støvdjævlen? (skærmkoordinater)
+function devilHit(sx, sy) {
+  if (!devil || visiting) return false;
+  const [px, py] = toScreen(devil.x, devil.y - 50);
+  return Math.abs(px - sx) < 46 * Math.max(cam.z, 0.7) && Math.abs(py - sy) < 70 * Math.max(cam.z, 0.7);
+}
+
+// ---------- Version 10: solstorm og nordlys ----------
+// Nordlysets striber tegnes én gang som lodrette gradienter og strækkes derefter.
+const AURORA = [['94,229,154', 0, 1], ['177,127,219', 1.7, 0.7], ['91,184,240', 3.1, 0.5]].map(([col, off, a]) => {
+  const c = document.createElement('canvas'); c.width = 1; c.height = 64;
+  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 64);
+  gr.addColorStop(0, `rgba(${col},0)`); gr.addColorStop(0.75, `rgba(${col},${0.42 * a})`); gr.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = gr; g.fillRect(0, 0, 1, 64);
+  return [c, off];
+});
+function drawFlare(now) {
+  const ev = S.event;
+  if (ev.type === 'flare' && ev.until > now) {
+    if (!ev.hit) {
+      // advarsel: en orange glød pulserer i kanten
+      const p = 0.5 + Math.sin(now / 180) * 0.5;
+      const g = ctx.createRadialGradient(viewW / 2, viewH / 2, Math.min(viewW, viewH) * 0.35, viewW / 2, viewH / 2, Math.max(viewW, viewH) * 0.75);
+      g.addColorStop(0, 'rgba(255,122,26,0)'); g.addColorStop(1, `rgba(255,122,26,${0.25 + p * 0.25})`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, viewW, viewH);
+    } else {
+      // stormen raser: hvidgult flimmer
+      ctx.fillStyle = `rgba(255, 236, 170, ${0.18 + Math.random() * 0.12})`;
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+  }
+  if (S.aurora > now && solClock(now).night) {
+    const top = toScreen(...tileCenter(0))[1] - 140;
+    const h = Math.max(150, Math.min(viewH * 0.5, top));
+    ctx.globalCompositeOperation = 'lighter';
+    AURORA.forEach(([strip, off]) => {
+      for (let x = 0; x < viewW; x += 6) {
+        const wave = Math.sin(x / 140 + now / 2400 + off) * 0.5 + Math.sin(x / 57 - now / 1700 + off) * 0.25;
+        const y0 = h * (0.15 + 0.25 * (wave + 0.75));
+        ctx.drawImage(strip, x, y0 - h * 0.35, 6, h * 0.5);
+      }
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }
 }
 
 // Besøg hos en nabo: kortet tegnes med naboens felter i stedet for dine egne.
@@ -546,6 +687,7 @@ function drawScene(now) {
   ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (viewW / 2 - cam.x * cam.z), dpr * (viewH / 2 - cam.y * cam.z));
 
   for (let i = 0; i < S.tiles.length; i++) drawGround(i);
+  drawLife();
   drawSeasonGround();
   if (camGoal) {
     cam.x += (camGoal.x - cam.x) * 0.12; cam.y += (camGoal.y - cam.y) * 0.12;
@@ -567,6 +709,14 @@ function drawScene(now) {
   for (let i = 0; i < S.tiles.length; i++) order.push({ d: Math.floor(i / COLS) + (i % COLS), fn: () => drawTile(i, now, t) });
   if (!visiting) for (const a of Object.values(agents)) if (a) order.push({ d: a.depth + 0.5, fn: () => drawAgent(a, now) });
   if (!visiting && pet.ready && S.level >= PET_LEVEL) order.push({ d: pet.y / (TH / 2) + 2, fn: () => drawPet(now) });
+  if (!visiting) {
+    for (const id of Object.keys(S.crew)) {
+      const p = S.crew[id].post;
+      if (p >= 0) order.push({ d: Math.floor(p / COLS) + (p % COLS) + 0.6, fn: () => drawCrew(id, p, now) });
+    }
+    devilPass(Date.now());
+    if (devil) order.push({ d: devil.y / (TH / 2) + 0.5, fn: () => drawDevil() });
+  }
   order.sort((a, b) => a.d - b.d);
   for (const o of order) o.fn();
 
@@ -802,7 +952,7 @@ let hoverIdx = -1;
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse' && !pointers.size) {
     const [x, y] = localPos(e);
-    hoverIdx = visiting ? -1 : (petHit(x, y) ? -2 : pickTile(x, y));
+    hoverIdx = visiting ? -1 : (petHit(x, y) || devilHit(x, y) ? -2 : pickTile(x, y));
     const t = S.tiles[hoverIdx];
     canvas.style.cursor = hoverIdx === -2 || (t && t.t !== 'locked') || (t && neighbourCleared(hoverIdx)) ? 'pointer' : 'grab';
     return;
@@ -847,7 +997,8 @@ function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
   if (drag.mode === 'pending') {
-    if (petHit(drag.sx, drag.sy)) onPet();
+    if (devilHit(drag.sx, drag.sy)) catchDevil();
+    else if (petHit(drag.sx, drag.sy)) onPet();
     else if (drag.start >= 0) onTile(drag.start);
   }
   if (pointers.size === 0) drag = null;

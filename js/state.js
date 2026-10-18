@@ -22,7 +22,7 @@ function newState() {
 
 // Udfylder felter, der mangler i gamle eller nye gemte spil.
 function defaults(st) {
-  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0, helped: 0, postSold: 0, petFinds: 0 }, st.stats);
+  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0, helped: 0, postSold: 0, petFinds: 0, devils: 0 }, st.stats);
   return Object.assign({
     v: 2, credits: 50, xp: 0, level: 1, cleared: 0, silo: 1, inv: {}, orders: [], lastCrop: null,
     stats: { harvest: 0, produce: 0, deliver: 0, earn: 0 },
@@ -38,6 +38,10 @@ function defaults(st) {
     prestige: 0, pet: { next: 0, found: null },
     explore: { done: {} }, mystery: { n: 0, active: null }, pop: { n: POP_BASE, moral: 70, sol: 0, rich: false },
     terraTotal: 0, terraMine: 0, timewave: '',
+    council: { sol: 0, pending: null, chain: null, seen: {}, policies: {}, decided: 0, log: [] },
+    gene: { active: null, book: {} }, genes: {},
+    crew: { ida: { post: -1, energy: 100 }, bo: { post: -1, energy: 100 }, kim: { post: -1, energy: 100 }, dina: { post: -1, energy: 100 } },
+    life: new Array(COLS * ROWS).fill(0), lifeAt: 0, aurora: 0,
   }, st, { stats });
 }
 
@@ -231,7 +235,9 @@ function plant(idx, crop, quiet) {
   if (S.credits < c.cost) return quiet ? false : fail('Ikke nok kreditter.');
   S.credits -= c.cost;
   const now = Date.now();
-  Object.assign(tile, { crop, start: now, end: now + c.time * growthMult() * seasonCrop() * 1000, last: crop });
+  const season_ = hasTrait(crop, 'haardfoer') ? Math.min(1, seasonCrop()) : seasonCrop();
+  const k = growthMult() * season_ * policyMult('crop') * crewCropMult(idx) * lifeCrop(idx) * (hasTrait(crop, 'hurtig') ? 0.75 : 1);
+  Object.assign(tile, { crop, start: now, end: now + c.time * k * 1000, last: crop });
   S.lastCrop = crop;
   if (!quiet) Sound.play('plant');
   save();
@@ -244,8 +250,10 @@ function harvest(idx, auto) {
   if (!spaceFor(HARVEST_YIELD)) return auto ? false : fail('Lageret er fuldt. Sælg varer, eller udvid lageret.');
   const crop = tile.crop;
   const extra = (hasTech('hoest') && Math.random() < 0.25) || (season().id === 'efteraar' && Math.random() < 0.2);
-  const n = HARVEST_YIELD + (extra && spaceFor(HARVEST_YIELD + 1) ? 1 : 0);
+  const rich = hasTrait(crop, 'rig') ? 1 : 0;
+  const n = HARVEST_YIELD + rich + (extra && spaceFor(HARVEST_YIELD + rich + 1) ? 1 : 0);
   addItem(crop, n);
+  if (hasTrait(crop, 'soed')) earn(ITEMS[crop].value * 2);
   S.stats.harvest++;
   track('harvest', n);
   addXP(CROPS[crop].xp);
@@ -520,7 +528,10 @@ function eventTick(now) {
     ev.nextAt = now + rand(6, 12) * 60000;
     save();
   }
-  if (!ev.type && now >= ev.nextAt) startEvent(Math.random() < 0.5 ? 'storm' : 'meteor', now);
+  if (!ev.type && now >= ev.nextAt) {
+    const roll = Math.random();
+    startEvent(S.level >= FLARE.level && roll < 0.25 ? 'flare' : roll < 0.62 ? 'storm' : 'meteor', now);
+  }
   S.pickups = S.pickups.filter((p) => p.until > now);
 }
 
@@ -533,10 +544,14 @@ function startEvent(type, now = Date.now()) {
       toast(`${icon('storm')} Støvstorm! Stormskjoldet beskytter kuplerne.`);
     } else {
       // Afgrøder, der gror, bliver 45 sekunder forsinket.
-      S.tiles.forEach((t) => { if (t.t === 'plot' && t.crop && t.end > now) t.end += 45000; });
+      S.tiles.forEach((t) => { if (t.t === 'plot' && t.crop && t.end > now && !hasTrait(t.crop, 'haardfoer')) t.end += 45000; });
       toast(`${icon('storm')} Støvstorm! Afgrøderne gror langsommere. Et stormskjold kan beskytte dem.`, 'bad', 4500);
     }
     Sound.play('storm'); if (type === 'storm') Sound.say('ida_storm');
+  } else if (type === 'flare') {
+    Object.assign(ev, { warnUntil: now + FLARE.warn, until: now + FLARE.warn + FLARE.ms, shelter: false, hit: false });
+    toast(`${icon('solstorm')} Solstorm på vej! Send kolonisterne i ly, før den rammer.`, 'bad', 5000);
+    Sound.play('error'); Sound.play('decode');
   } else {
     ev.until = now + METEOR_MS;
     const spots = S.tiles.map((t, i) => i).filter((i) => S.tiles[i].t === 'empty' || S.tiles[i].t === 'locked');
@@ -621,7 +636,7 @@ function feedPen(idx) {
     if (!a.end && have('foder') > 0) {
       addItem('foder', -1);
       a.start = now;
-      a.end = now + def.time * (hasTech('dyr') ? 0.7 : 1) * (terraStage() >= 4 ? 0.85 : 1) * powerStatus().mult * 1000;
+      a.end = now + def.time * (hasTech('dyr') ? 0.7 : 1) * (terraStage() >= 4 ? 0.85 : 1) * powerStatus().mult * policyMult('animal') * 1000;
       n++;
     }
   }
@@ -667,7 +682,7 @@ function startExpedition(id) {
   if (!e || S.expedition || e.level > S.level) return false;
   for (const [it, q] of Object.entries(e.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(e.cost)) addItem(it, -q);
-  S.expedition = { id, start: Date.now(), end: Date.now() + e.time * (hasTech('rover') ? 0.6 : 1) * 1000 };
+  S.expedition = { id, start: Date.now(), end: Date.now() + e.time * (hasTech('rover') ? 0.6 : 1) * crewRoverMult() * 1000 };
   Sound.play('rover');
   toast(`${icon('rover')} Roveren kører mod ${e.name}.`, 'good');
   save();
@@ -730,7 +745,7 @@ function importSave(code) {
 const hasTech = (id) => !!(S.research && S.research.done[id]);
 const growthMult = () => (1 - (hasTech('vaekst1') ? 0.15 : 0) - (hasTech('vaekst2') ? 0.15 : 0)) * prestigeGrowth(S.prestige || 0) * terraCrop();
 const happiness = () => Math.min(HAPPY_MAX, S.tiles.reduce((a, t) => a + (t.t === 'deco' ? DECOR[t.id].happy : 0), 0));
-const payMult = () => 1 + (hasTech('handel') ? 0.15 : 0) + happiness() / 100 + prestigePay(S.prestige || 0);
+const payMult = () => 1 + (hasTech('handel') ? 0.15 : 0) + happiness() / 100 + prestigePay(S.prestige || 0) + policySum('pay') + crewPay();
 const orderPay = (credits) => Math.round(credits * payMult());
 
 // ---------- Pynt ----------
@@ -859,7 +874,7 @@ function startResearch(id) {
   for (const [it, q] of Object.entries(r.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(r.cost)) addItem(it, -q);
   S.credits -= r.credits;
-  S.research.active = { id, start: Date.now(), end: Date.now() + r.time * 1000 };
+  S.research.active = { id, start: Date.now(), end: Date.now() + r.time * crewLabMult() * 1000 };
   Sound.play('decode');
   save();
   return true;
@@ -917,6 +932,8 @@ function swapTiles(a, b) {
   if (needs(S.tiles[a], b) || needs(S.tiles[b], a)) return fail('Krystalboret skal stå på en krystalåre.');
   [S.tiles[a], S.tiles[b]] = [S.tiles[b], S.tiles[a]];
   S.pickups = S.pickups.filter((p) => p.idx !== a && p.idx !== b);
+  // specialisterne følger med det, de passer
+  for (const c of Object.values(S.crew)) { if (c.post === a) c.post = b; else if (c.post === b) c.post = a; }
   save();
   return true;
 }
@@ -947,6 +964,9 @@ function adviceList() {
   const find = (fn) => S.tiles.findIndex(fn);
   const mp = missionProgress();
   if (S.tut >= TUTORIAL.length && mp && mp.done) out.push({ icon: 'mission', text: 'En mission er klaret. Hent belønningen.', act: 'missions' });
+  if (S.council && S.council.pending) out.push({ icon: 'raad', text: 'Kolonirådet venter på din beslutning.', act: 'council' });
+  if (S.event.type === 'flare' && !S.event.hit && !S.event.shelter) out.push({ icon: 'solstorm', text: 'Solstorm på vej! Send kolonisterne i ly.', act: 'shelter' });
+  if (S.crew && Object.keys(S.crew).some((id) => crewUnlocked(id) && S.crew[id].post < 0 && S.crew[id].energy >= 80)) out.push({ icon: 'col-bo', text: 'En udhvilet specialist venter på en opgave.', act: 'crew' });
   if (S.pet && S.pet.found) out.push({ icon: 'boelle', text: 'Bølle har fundet noget. Tryk på den lille drone.', act: 'pet' });
   const readyPlots = S.tiles.filter((t) => t.t === 'plot' && t.crop && now >= t.end).length;
   if (readyPlots) out.push({ icon: 'sprout', text: `Høst ${readyPlots} ${readyPlots === 1 ? 'moden kuppel' : 'modne kupler'}. Træk fingeren hen over dem.`, idx: find((t) => t.t === 'plot' && t.crop && now >= t.end) });
@@ -1005,9 +1025,10 @@ const seasonCrop = () => ({ foraar: 0.85, vinter: 1.2 }[season().id] || 1);
 // Produktionstid for en bygning: opgraderinger, sommer, og isbor om vinteren eller på et iskrater.
 function buildTime(idx) {
   const t = S.tiles[idx];
-  let k = speedOf(t) * powerStatus().mult * popMult() * (terraStage() >= 5 ? 0.85 : 1);
+  let k = speedOf(t) * powerStatus().mult * popMult() * (terraStage() >= 5 ? 0.85 : 1) * policyMult('build') * crewBuildMult(idx);
   if (season().id === 'sommer') k *= 0.85;
   if (t.id === 'isbor') {
+    k *= policyMult('isbor');
     if (S.specials[idx] === 'ice') k *= 0.5;
     if (season().id === 'vinter') k *= 0.5;
   }
@@ -1210,7 +1231,7 @@ function powerStatus(now = Date.now()) {
 // ---------- Version 8: befolkning ----------
 const solIndex = (now = Date.now()) => Math.floor(now / DAY_MS);
 const popCap = () => POP_BASE + POP_PER_HABITAT * S.tiles.filter((t) => t.t === 'b' && t.id === 'habitat').length;
-const popNeeds = () => { const extra = Math.max(0, S.pop.n - POP_BASE); return { ilt: Math.ceil(extra / 4), food: extra }; };
+const popNeeds = () => { const extra = Math.max(0, S.pop.n - POP_BASE); return { ilt: Math.ceil(extra / 4), food: Math.ceil(extra * policyMult('food')) }; };
 function popMult() {
   let k = 1 - Math.min(0.2, Math.max(0, S.pop.n - POP_BASE) * 0.01);
   if (S.pop.moral < 40) k *= 1.15;
@@ -1236,6 +1257,9 @@ function processSol(quiet) {
   else if (met) S.pop.moral = Math.min(100, S.pop.moral + 10);
   else if (food || ilt) S.pop.moral = Math.max(10, S.pop.moral - 5);
   else S.pop.moral = Math.max(10, S.pop.moral - 15);
+  // rådets politikker, Dina ved et habitat og den grønne livszone
+  S.pop.moral = Math.max(10, Math.min(100, Math.round(S.pop.moral + policySum('moral') + crewMoral() + lifeMoral())));
+  crewSol();
   // nye kolonister flytter kun ind, når alle har fået det, de skal bruge
   if ((met || !need.food) && S.pop.moral >= 60 && S.pop.n < popCap()) S.pop.n = Math.min(popCap(), S.pop.n + (S.pop.moral >= 90 ? 2 : 1));
   if (!quiet && (need.food || S.pop.n !== before)) {
@@ -1277,7 +1301,7 @@ function startSector(i) {
   const trip = sectorTrip(i);
   for (const [it, q] of Object.entries(trip.cost)) if (have(it) < q) return fail(`Mangler ${ITEMS[it].name}.`);
   for (const [it, q] of Object.entries(trip.cost)) addItem(it, -q);
-  const ms = trip.min * 60000 * (hasTech('rover') ? 0.6 : 1);
+  const ms = trip.min * 60000 * (hasTech('rover') ? 0.6 : 1) * crewRoverMult();
   S.expedition = { sector: i, start: Date.now(), end: Date.now() + ms };
   Sound.play('rover');
   toast(`${icon('rover')} Roveren kører mod ${SECTORS[i].name}.`, 'good');

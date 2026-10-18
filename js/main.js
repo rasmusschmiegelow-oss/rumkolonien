@@ -23,6 +23,7 @@ function loop(now) {
       lastSeason = seasonIndex(t);
     }
     researchTick(t);
+    colonyTick(t);
     Sound.ambience(soundscape(t));
   }
   updateAgents(dt);

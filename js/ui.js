@@ -43,6 +43,7 @@ function onTile(idx) {
   const now = Date.now();
   if (visiting) return toast(`Du besøger ${escapeHtml(visiting.name)}. Tryk på "Tilbage" for at komme hjem.`);
   if (editMode) return editTap(idx);
+  if (crewPick) { const id = crewPick; if (assignCrew(id, idx)) { endCrewPick(); toast(`${icon('col-' + id)} ${COLONISTS[id].name} arbejder nu ved ${tileName(idx).toLowerCase()}.`, 'good'); } return; }
   if (collectPickup(idx)) return;
   Sound.play('click');
   switch (tile.t) {
@@ -54,6 +55,7 @@ function onTile(idx) {
       if (BUILDINGS[tile.id].garage) return openGarage(idx);
       if (BUILDINGS[tile.id].lab) return openLab(idx);
       if (BUILDINGS[tile.id].monolith) return openMonolith();
+      if (BUILDINGS[tile.id].gen) return openGenlab();
       if (BUILDINGS[tile.id].power) return openEnergy();
       if (tile.id === 'habitat') return openPop();
       collect(idx);
@@ -131,12 +133,17 @@ function openPlant(idx) {
     const locked = c.level > S.level;
     return `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(id)}</div>
-      <div class="info"><b>${ITEMS[id].name}</b><small>${locked ? `Låses op på niveau ${c.level}` : `${fmtTime(c.time)} · giver ${HARVEST_YIELD} stk · +${c.xp} ${icon('xp', 'ic-s')}`}</small></div>
+      <div class="info"><b>${ITEMS[id].name}${S.genes[id] ? ` <span class="sort">${S.genes[id].names.join(' · ')}</span>` : ''}</b><small>${locked ? `Låses op på niveau ${c.level}` : `${fmtTime(c.time * (hasTrait(id, 'hurtig') ? 0.75 : 1))} · giver ${HARVEST_YIELD + (hasTrait(id, 'rig') ? 1 : 0)} stk · +${c.xp} ${icon('xp', 'ic-s')}`}</small></div>
+      <div class="traits">${traitBadges(id)}</div>
       <button class="primary" data-act="plant" data-idx="${idx}" data-arg="${id}" ${locked || S.credits < c.cost ? 'disabled' : ''}>${c.cost} ${icon('coin', 'ic-s')}</button>
     </div>`;
   }).join('');
+  const perks = [];
+  if (crewCropMult(idx) < 1) perks.push(`${icon('col-bo', 'ic-s')} Bo passer kuplerne her: ${Math.round((1 - crewCropMult(idx)) * 100)} % hurtigere`);
+  if (S.life[idx] >= 10) perks.push(`${icon('lav', 'ic-s')} Livszone ${Math.round(S.life[idx])} %: ${Math.round((1 - lifeCrop(idx)) * 100)} % hurtigere`);
+  if (policyMult('crop') < 1) perks.push(`${icon('raad', 'ic-s')} Rådets politik: ${Math.round((1 - policyMult('crop')) * 100)} % hurtigere`);
   showModal(`${icon('kuppel')} Drivhuskuppel`,
-    `<p class="muted tip">Tip: Når du har plantet én gang, kan du trække fingeren hen over tomme kupler for at plante det samme igen.</p><div class="list">${rows}</div>`);
+    `${perks.length ? `<p class="perks">${perks.join(' · ')}</p>` : ''}<p class="muted tip">Tip: Når du har plantet én gang, kan du trække fingeren hen over tomme kupler for at plante det samme igen.</p><div class="list">${rows}</div>`);
 }
 
 function queueSlots(tile, now) {
@@ -187,6 +194,8 @@ function openBuilding(idx) {
   if (tile.id === 'isbor' && S.specials[idx] === 'ice') perks.push(`${icon('iskrater', 'ic-s')} Står på et iskrater: dobbelt så hurtig`);
   if (tile.id === 'isbor' && season().id === 'vinter') perks.push(`${icon('vinter', 'ic-s')} Vinter: dobbelt så hurtig`);
   if (season().id === 'sommer') perks.push(`${icon('sommer', 'ic-s')} Sommer: 15 % hurtigere`);
+  if (crewBuildMult(idx) < 1) perks.push(`${icon('col-ida', 'ic-s')} Ida passer maskinerne: ${Math.round((1 - crewBuildMult(idx)) * 100)} % hurtigere`);
+  if (policyMult('build') !== 1) perks.push(`${icon('raad', 'ic-s')} Rådets politik: ${Math.round((1 - policyMult('build')) * 100)} % hurtigere`);
   showModal(`${icon(tile.id)} ${b.name}`,
     `${perks.length ? `<p class="perks">${perks.join(' · ')}</p>` : ''}<div class="section-title" id="bcount"></div>
      <div class="queue" id="bslots"></div>
@@ -371,6 +380,11 @@ function openPop() {
       <div class="row"><div class="ico">${icon('box')}</div><div class="info"><b>Spis også fine retter</b><small>Suppe, pizza, tærte, pandekager, ost og latte. Ellers spises kun basisvarer.</small></div>
         <button data-act="poprich">${S.pop.rich ? 'Til' : 'Fra'}</button></div>
     </div>
+    <div class="list">
+      <div class="row"><div class="ico">${icon('lav')}</div><div class="info"><b>Livszone ${lifeAvg()} %</b><small>${lifeMoral() ? `Den grønne jord giver +${lifeMoral()} moral pr. sol.` : 'Ved 40 % giver den grønne jord +2 moral pr. sol, ved 70 % +4.'}</small></div></div>
+      ${crewMoral() ? `<div class="row"><div class="ico">${icon('col-dina')}</div><div class="info"><b>Dina passer habitatet</b><small>+${crewMoral()} moral pr. sol</small></div></div>` : ''}
+      ${policySum('moral') ? `<div class="row"><div class="ico">${icon('raad')}</div><div class="info"><b>Rådets politikker</b><small>${policySum('moral') > 0 ? '+' : ''}${policySum('moral')} moral pr. sol</small></div></div>` : ''}
+    </div>
     <p class="muted small">Landingsfartøjet holder de første ${POP_BASE} i live. Hvert habitat giver plads til ${POP_PER_HABITAT} mere. Hver kolonist ud over de første 4 gør produktionen 1 % hurtigere (højst 20 %). Næste sol om <span data-until="${nextSol}"></span>.</p>`);
 }
 
@@ -535,6 +549,11 @@ function openBuild(idx) {
     </div>`;
   }
   const sp = S.specials[idx];
+  rows = `<div class="row">
+      <div class="ico">${icon('lav')}</div>
+      <div class="info"><b>Så lav</b><small>Livszone ${Math.round(S.life[idx] || 0)} % · +45 % her og +15 % omkring. Grøn jord får afgrøder til at gro op til 20 % hurtigere.</small></div>
+      <button class="primary" data-act="sow" data-idx="${idx}" ${have('alge') >= LIFE_SOW.alge ? '' : 'disabled'}>${LIFE_SOW.alge} ${icon('alge', 'ic-s')}</button>
+    </div>` + rows;
   if (sp) rows = `<div class="row special"><div class="ico">${icon(SPECIALS[sp].sprite)}</div><div class="info"><b>${SPECIALS[sp].name}</b><small>${SPECIALS[sp].desc}</small></div></div>` + rows;
   for (const [id, b] of Object.entries(BUILDINGS)) {
     const built = !b.multi && owns(id), locked = b.level > S.level;
@@ -963,6 +982,113 @@ function openHelp() {
     <button data-act="reset">Start en ny koloni</button>`);
 }
 
+// ---------- Version 10: kolonirådet ----------
+const solsLeft = (until) => Math.max(0, until - solIndex());
+function policyChips() {
+  const list = activePolicies();
+  if (!list.length) return '<p class="muted small">Ingen politikker er i kraft lige nu.</p>';
+  return `<div class="policies">${list.map((id) => `<div class="policy"><b>${POLICIES[id].name}</b><small>${POLICIES[id].desc} · ${solsLeft(S.council.policies[id])} sol tilbage</small></div>`).join('')}</div>`;
+}
+function openCouncil() {
+  const c = councilPending();
+  const nextSol = (solIndex() + 1) * DAY_MS;
+  let body;
+  if (c) {
+    const opt = (k) => {
+      const o = c[k], ok = fxAffordable(o.fx);
+      return `<button class="choice ${k}" data-act="decide" data-arg="${k}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${fxText(o.fx) || 'Ingen umiddelbar virkning'}</small>${ok ? '' : '<em>Det har I ikke råd til</em>'}</button>`;
+    };
+    body = `<div class="colonist council"><div class="portrait">${icon('col-' + c.who, 'ic-xl')}</div><div class="col-body"><b>${COLONISTS[c.who].name}</b><p class="quote big">“${c.text}”</p></div></div>
+      <div class="choices">${opt('a')}${opt('b')}</div>`;
+  } else {
+    body = `<p class="center">Rådet mødes igen om <b><span data-until="${nextSol}"></span></b>, når en ny sol begynder.</p>`;
+  }
+  const log = S.council.log.slice(0, 4).map((l) => { const d = COUNCIL.find((x) => x.id === l.id); return d ? `<li>${COLONISTS[d.who].name.split(' ')[1]}: <b>${d[l.choice].label}</b></li>` : ''; }).join('');
+  showModal(`${icon('raad')} Kolonirådet`, `${body}
+    <div class="section-title">Politikker i kraft</div>${policyChips()}
+    ${log ? `<div class="section-title">Seneste beslutninger</div><ul class="log">${log}</ul>` : ''}`);
+}
+
+// ---------- Version 10: gen-lab ----------
+function cropChoices(role, sel, other) {
+  return Object.keys(CROPS).filter((id) => CROPS[id].level <= S.level).map((id) => {
+    const enough = have(id) >= GENE.seeds;
+    return `<button class="crop-pick ${sel === id ? 'on' : ''}" data-act="genpick" data-arg="${role}:${id}" ${enough && id !== other ? '' : 'disabled'} title="${ITEMS[id].name}">${icon(id)}<small>${have(id)}</small></button>`;
+  }).join('');
+}
+function traitBadges(crop, cls = 'ic-s') {
+  return cropTraits(crop).map((t) => `<span class="trait" title="${TRAITS[t].name}: ${TRAITS[t].desc}">${icon(t, cls)}</span>`).join('');
+}
+function openGenlab() {
+  const g = S.gene.active;
+  let head;
+  if (g) {
+    head = `<div class="cross-run">${icon(g.a, 'ic-xl')}<span class="x">×</span>${icon(g.b, 'ic-xl')}</div>
+      <p class="center">Krydsningen er færdig om <b><span data-until="${g.end}"></span></b>.</p>`;
+  } else {
+    const sel = openGenlab.sel || {};
+    const a = sel.a, b = sel.b;
+    const known = a && b ? S.gene.book[a + '+' + b] : null;
+    const result = a && b ? (known ? `${icon(known)} <b>${hybridName(a, b)}</b> giver egenskaben <b>${TRAITS[known].name}</b>.` : `${icon('dna')} <b>${hybridName(a, b)}</b>: Egenskaben er ukendt. Prøv det!`) : 'Vælg en moderplante og en faderplante.';
+    const ready = a && b && have(a) >= GENE.seeds && have(b) >= GENE.seeds && S.credits >= GENE.credits;
+    head = `<p class="small">Moderplanten får en ny egenskab, som afhænger af faderen. Hver afgrøde kan have ${GENE.max} egenskaber. Et forsøg koster ${GENE.seeds} af hver afgrøde og ${GENE.credits} ${icon('coin', 'ic-s')} og tager ${GENE.min} minutter.</p>
+      <div class="section-title">Moderplante</div><div class="crop-row">${cropChoices('a', a, b)}</div>
+      <div class="section-title">Faderplante</div><div class="crop-row">${cropChoices('b', b, a)}</div>
+      <div class="cross-preview">${result}</div>
+      <button class="primary wide" data-act="cross" ${ready ? '' : 'disabled'}>Kryds</button>`;
+  }
+  const book = Object.keys(CROPS).filter((id) => S.genes[id]).map((id) => `<div class="row"><div class="ico">${icon(id)}</div>
+    <div class="info"><b>${ITEMS[id].name}</b><small>${S.genes[id].traits.map((t, i) => `${S.genes[id].names[i]}: ${TRAITS[t].name.toLowerCase()} (${TRAITS[t].desc.toLowerCase()})`).join(' · ')}</small></div>
+    <div class="traits">${traitBadges(id, 'ic')}</div></div>`).join('');
+  const found = Object.keys(S.gene.book).length;
+  showModal(`${icon('genlab')} Gen-lab`, `${head}
+    <div class="section-title">Sortsbogen · ${found} krydsninger</div>
+    ${book ? `<div class="list">${book}</div>` : '<p class="muted small">Ingen nye sorter endnu.</p>'}`);
+}
+function showCross(r) {
+  const t = TRAITS[r.trait];
+  showModal(`${icon('dna')} ${r.gained ? 'Ny Mars-sort!' : 'Krydsningen er færdig'}`, `
+    <div class="levelup"><div class="cross-run">${icon(r.a, 'ic-xl')}<span class="x">×</span>${icon(r.b, 'ic-xl')}</div>
+    <div class="big-name">${r.name}</div>
+    <div class="unlocks"><span>${icon(r.trait)} ${t.name}: ${t.desc}</span></div>
+    <p>${r.gained ? `Fra nu af gror sorten ${r.name} i alle kupler, hvor du planter ${ITEMS[r.a].name.toLowerCase()}.` : `${ITEMS[r.a].name} ${cropTraits(r.a).includes(r.trait) ? 'har allerede den egenskab' : `har allerede ${GENE.max} egenskaber`}. Krydsningen står i sortsbogen.`}</p>
+    <button class="primary wide" data-act="genlab">Videre</button></div>`);
+}
+
+// ---------- Version 10: specialister ----------
+let crewPick = null;
+function tileName(idx) {
+  const t = S.tiles[idx];
+  if (!t) return '';
+  if (t.t === 'b') return BUILDINGS[t.id].name;
+  return { plot: 'Drivhuskuppel', pad: 'Landingspladsen', empty: 'Ryddet felt', pen: ANIMALS[t.id] ? ANIMALS[t.id].name : 'Indhegning' }[t.t] || 'Feltet';
+}
+function openCrew() {
+  const rows = Object.keys(CREW).map((id) => {
+    const c = S.crew[id], def = CREW[id], col = COLONISTS[id];
+    if (!crewUnlocked(id)) return `<div class="row locked"><div class="ico">${icon('col-' + id)}</div><div class="info"><b>${col.name}</b><small>Kommer på niveau ${Math.max(CREW_LEVEL, col.level)}</small></div></div>`;
+    const tired = c.energy < 30;
+    return `<div class="row crew">
+      <div class="ico">${icon('col-' + id)}</div>
+      <div class="info"><b>${col.name}</b><small>${def.desc}</small>
+        <div class="energy ${tired ? 'low' : ''}"><div style="width:${c.energy}%"></div></div>
+        <small>${c.post >= 0 ? `Arbejder ved <b>${tileName(c.post)}</b>${tired ? ' · træt: halv effekt' : ''}` : `Hviler · energi ${c.energy} %`}</small></div>
+      <div class="btncol">${c.post >= 0 ? `<button data-act="crewrest" data-arg="${id}">Hvil</button>` : ''}<button class="primary" data-act="crewpick" data-arg="${id}" ${c.energy < 10 ? 'disabled' : ''}>${c.post >= 0 ? 'Flyt' : 'Sæt på post'}</button></div>
+    </div>`;
+  }).join('');
+  showModal(`${icon('befolkning')} Specialister`, `<p class="small">Sæt specialisterne på en post. De mister ${CREW_WORK} % energi pr. sol, mens de arbejder, og får ${CREW_REST} % igen pr. sol, de hviler. Under 30 % giver de halv effekt.</p>
+    <div class="list">${rows}</div>`);
+}
+function startCrewPick(id) {
+  crewPick = id;
+  closeModal();
+  const posts = { ida: 'en produktionsbygning', bo: 'en kuppel eller et ryddet felt mellem kuplerne', kim: 'landingspladsen eller rovergaragen', dina: 'et habitat eller forskningslabbet' }[id];
+  $('crewBannerIc').src = `${ICON_DIR}col-${id}.svg`;
+  $('crewBannerText').textContent = `Tryk på ${posts} til ${COLONISTS[id].name}.`;
+  $('crewBanner').hidden = false;
+}
+function endCrewPick() { crewPick = null; $('crewBanner').hidden = true; }
+
 // ---------- Knapper ----------
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]');
@@ -1048,6 +1174,9 @@ document.addEventListener('click', (e) => {
       if (a.act === 'energy') return openEnergy();
       if (a.act === 'pop') return openPop();
       if (a.act === 'explore') return openExplore();
+      if (a.act === 'council') return openCouncil();
+      if (a.act === 'crew') return openCrew();
+      if (a.act === 'shelter') { seekShelter(); return closeModal(); }
       if (a.act === 'pet') { closeModal(); camGoal = { x: pet.x, y: pet.y - 60 }; return; }
       closeModal();
       focusTile(a.idx);
@@ -1107,6 +1236,23 @@ document.addEventListener('click', (e) => {
     case 'poprich': S.pop.rich = !S.pop.rich; save(); return openPop();
     case 'decode': if (startDecode()) openLab(); return;
     case 'timewave': { const n = timeWave(); if (n !== false) { closeModal(); toast(`${icon('monolit')} Tidsbølgen skyllede over kolonien. ${n} ting er færdige.`, 'good', 5000); } return; }
+    case 'council': Sound.play('click'); return openCouncil();
+    case 'decide': {
+      const c = councilPending(), lvl = S.level, o = decide(arg);
+      if (!o) return;
+      closeModal();
+      if (S.level === lvl) toast(`${icon('col-' + c.who)} ${COLONISTS[c.who].name}: “${o.label}. Det gør vi.”`, 'good', 3500);
+      return;
+    }
+    case 'genlab': Sound.play('click'); return openGenlab();
+    case 'genpick': { const [role, id] = arg.split(':'); openGenlab.sel = { ...(openGenlab.sel || {}), [role]: id }; Sound.play('click'); return openGenlab(); }
+    case 'cross': { const sel = openGenlab.sel || {}; if (startCross(sel.a, sel.b)) openGenlab(); return; }
+    case 'crew': Sound.play('click'); return openCrew();
+    case 'crewpick': return startCrewPick(arg);
+    case 'crewrest': restCrew(arg); return openCrew();
+    case 'crewcancel': return endCrewPick();
+    case 'sow': if (sowLichen(idx)) closeModal(); return;
+    case 'shelter': seekShelter(); return;
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;
@@ -1126,7 +1272,7 @@ document.addEventListener('change', (e) => {
   Cloud.push(true);
   toast(`Du hedder nu ${escapeHtml(name)} på ranglisten.`, 'good');
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); if (crewPick) endCrewPick(); } });
 
 // ---------- HUD ----------
 function updateHUD() {
@@ -1150,6 +1296,9 @@ function updateHUD() {
   $('festChip').hidden = !fest;
   if (fest) $('festNum').textContent = S.tickets;
   $('arcadeBtn').hidden = S.level < ARCADE.level;
+  $('councilBtn').hidden = S.level < COUNCIL_LEVEL || S.tut < TUTORIAL.length;
+  setBadge('councilBadge', S.council.pending ? 1 : 0);
+  $('crewBtn').hidden = S.level < CREW_LEVEL;
   Notify.badge(readyCount());
   const h = happiness();
   $('happy').hidden = !h;
@@ -1176,9 +1325,14 @@ function updateHUD() {
   const eb = $('eventBanner'), ev = S.event, now = Date.now();
   if (ev.type && ev.until > now) {
     eb.hidden = false;
-    eb.innerHTML = ev.type === 'storm'
+    const html = ev.type === 'storm'
       ? `${icon('storm', 'ic-s')} Støvstorm · ${fmtTime((ev.until - now) / 1000)}${owns('skjold') ? ' · skjoldet beskytter' : ''}`
-      : `${icon('meteor', 'ic-s')} Meteorregn · saml jernmalmen op`;
+      : ev.type === 'flare'
+        ? (!ev.hit ? `${icon('solstorm', 'ic-s')} Solstorm om <b data-until="${ev.warnUntil}"></b> ${ev.shelter ? '· alle er i ly' : '<button class="primary" data-act="shelter">Søg ly</button>'}`
+          : `${icon('solstorm', 'ic-s')} Solstorm · ${fmtTime((ev.until - now) / 1000)}${ev.shelter ? ' · alle er i ly' : ''}`)
+        : `${icon('meteor', 'ic-s')} Meteorregn · saml jernmalmen op`;
+    if (eb.dataset.html !== html) { eb.innerHTML = html; eb.dataset.html = html; }
+    eb.classList.toggle('flare', ev.type === 'flare' && !ev.hit);
   } else eb.hidden = true;
 
   document.querySelectorAll('[data-until]').forEach((el) => { el.textContent = fmtTime((Number(el.dataset.until) - now) / 1000); });

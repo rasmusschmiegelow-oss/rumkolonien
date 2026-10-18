@@ -71,6 +71,18 @@ Version 8 skal gøre Rumkolonien til et spil om at overleve og forvandle en frem
 - **Mars-mysteriet:** Artefakter afkodes i labbet til seks fragmenter af et signal fra "De Første". Når historien er fortalt, kan du bygge Monolitten. Én gang i døgnet sender den en Tidsbølge, der gør alt færdigt.
 - **Befolkning og livsstøtte:** Landingsfartøjet holder 4 kolonister i live. Habitater giver plads til flere, som skal have ilt og mad hver sol. Hvis alle får det, de skal bruge, stiger moralen, og nye flytter ind. Flere kolonister giver hurtigere produktion. Ingen dør, men lav moral gør kolonien langsommere.
 
+### Nyt i version 10: led en koloni, ikke en gård
+
+Version 10 handler om de valg, en kolonileder skal træffe, om de mennesker, man leder, og om en planet, der lever.
+
+- **Kolonirådet** *(fra niveau 3)*: Hver sol beder Ida, Bo, Kim eller Dina dig om at træffe en beslutning. Begge valg koster noget. Skal I holde fest eller spare? Tage imod flygtninge? Indføre overarbejde? Nogle valg sætter en politik i kraft i flere sol, og nogle historier fortsætter næste sol.
+- **Gen-lab** *(fra niveau 5)*: Kryds to afgrøder. Moderplanten får en egenskab, som afhænger af faderen: hurtig, rig, hårdfør eller sød. Den nye sort får sit eget navn, fx Kartomat. Sortsbogen holder styr på alle krydsninger.
+- **Specialister** *(fra niveau 4)*: Sæt Ida ved en fabrik, Bo mellem kuplerne, Kim ved landingspladsen eller rovergaragen og Dina ved et habitat eller labbet. De står med en boble over deres post. Arbejde trætter dem, så de skal hvile på skift.
+- **Livszonen:** Kupler, bioreaktorer, dyr og træer gør jorden omkring sig grøn, og grøn jord breder sig selv. Afgrøder på grøn jord gror op til 20 % hurtigere, og en grøn koloni giver bedre moral. Du kan også så lav med alger.
+- **Levende Marsvejr:** Støvdjævle vandrer hen over kortet om dagen. Fang dem med et tryk, før de forsinker kuplerne. Vindmøller får et skub, når en djævel passerer. Fra niveau 6 kommer solstorme med 30 sekunders varsel: send kolonisterne i ly og sæt produktionen på pause, eller tag chancen. Bagefter danser nordlyset over kolonien om natten.
+
+Alle nye ikoner er tegnet i Paper på arket "Version 10".
+
 ### Nyt i version 9: lyd
 
 - **Rigtige lydeffekter:** Over 50 lyde fra Kenneys CC0-pakker afløser de syntetiske bip. Hver handling har sin egen lyd med lidt variation i tonehøjde, så den ikke bliver ensformig.
@@ -109,6 +121,7 @@ python3 -m http.server 8000
 | `js/state.js` | Spilregler, gemning og alle handlinger |
 | `js/map.js` | Isometrisk kort, kamera, input, dag/nat, vejr og robotter |
 | `js/ui.js` | HUD, dialoger og beskeder |
+| `js/colony.js` | Version 10: kolonirådet, gen-lab, specialister, livszonen og Marsvejr |
 | `js/audio.js` | Lydmotor: effekter, jingler, stemmer, kulisse og styrke pr. kanal |
 | `assets/sfx/`, `assets/voice/` | Lydeffekter (Kenney.nl, CC0) og kolonisternes stemmer |
 | `js/sprites.js` | Indlæsning af SVG-grafikken |

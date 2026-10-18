@@ -103,6 +103,7 @@ const BUILDINGS = {
   habitat:       { name: 'Habitat',        level: 3,  cost: 400,  recipes: [], multi: true, desc: 'Boliger til 6 kolonister mere.' },
   monolit:       { name: 'Monolitten',     level: 9,  cost: 3000, recipes: [], monolith: true, desc: 'De Førstes efterladenskab. Kan bøje tiden én gang i døgnet.' },
   vinkaelder:    { name: 'Vinkælder',      level: 14, cost: 2500, recipes: ['vin'] },
+  genlab:        { name: 'Gen-lab',        level: 5,  cost: 900,  recipes: [], gen: true, desc: 'Kryds afgrøder til nye Mars-sorter med særlige egenskaber.' },
 };
 const QUEUE_MAX = 3;
 
@@ -166,6 +167,10 @@ const MEDALS = [
   { id: 'map',   name: 'Kortlægger',         desc: 'Udforsk 15 sektorer af Mars.',          test: () => Object.keys(S.explore.done).length >= 15, reward: 400 },
   { id: 'myst',  name: 'De Førstes arv',     desc: 'Byg Monolitten.',                       test: () => owns('monolit'), reward: 1500 },
   { id: 'pop',   name: 'Lille by',           desc: 'Nå 20 indbyggere.',                     test: () => S.pop.n >= 20, reward: 400 },
+  { id: 'raad',  name: 'Rådsformand',        desc: 'Træf 10 beslutninger i kolonirådet.',   test: () => (S.council && S.council.decided) >= 10, reward: 300 },
+  { id: 'gen',   name: 'Planteforædler',     desc: 'Find 6 egenskaber i gen-labbet.',      test: () => Object.keys((S.gene && S.gene.book) || {}).length >= 6, reward: 400 },
+  { id: 'oase',  name: 'Grøn oase',          desc: 'Få livszonen op på 60 %.',             test: () => lifeAvg() >= 60, reward: 500 },
+  { id: 'devil', name: 'Stormjæger',         desc: 'Fang 10 støvdjævle.',                  test: () => S.stats.devils >= 10, reward: 250 },
   { id: 'fest',  name: 'Festabe',            desc: 'Sæt festivalpynt op.',                  test: () => S.tiles.some((t) => t.t === 'deco' && DECOR[t.id].fest), reward: 150 },
 ];
 
@@ -433,3 +438,85 @@ const MONOLITH_DONE = 'Monolitten summer. Mars husker, hvordan det var at være 
 const POP_BASE = 4, POP_PER_HABITAT = 6;
 const FOOD = { aeg: 1, maelk: 1, gryde: 2, broed: 2, ost: 2, pandekage: 3, suppe: 4, pizza: 4, taerte: 4, latte: 1 };
 const FOOD_BASIC = ['aeg', 'maelk', 'gryde', 'broed'];
+
+// ---------- Version 10: kolonirådet ----------
+// Hver sol beder rådet dig om at træffe en beslutning. Valgene kan sætte en politik i kraft i nogle sol.
+const COUNCIL_LEVEL = 3;
+const POLICIES = {
+  rentfilter:  { name: 'Rene filtre',         desc: 'Bygningerne producerer 10 % hurtigere.', build: 0.9 },
+  overarbejde: { name: 'Overarbejde',         desc: 'Bygningerne producerer 25 % hurtigere, men moralen falder 5 pr. sol.', build: 0.75, moral: -5 },
+  rationering: { name: 'Rationering',         desc: 'Kolonisterne spiser det halve, men moralen falder 4 pr. sol.', food: 0.5, moral: -4 },
+  fest:        { name: 'Feststemning',        desc: 'Ordrer betaler 10 % mere, og moralen stiger 5 pr. sol.', pay: 0.1, moral: 5 },
+  beroemt:     { name: 'Berømt på Jorden',    desc: 'Ordrer betaler 20 % mere.', pay: 0.2 },
+  medicin:     { name: 'Marsmedicin',         desc: 'Moralen stiger 3 pr. sol.', moral: 3 },
+  groenjord:   { name: 'Kompost',             desc: 'Afgrøder gror 15 % hurtigere.', crop: 0.85 },
+  reserve:     { name: 'Isreserve',           desc: 'Isboret laver vand dobbelt så hurtigt.', isbor: 0.5 },
+  stolthed:    { name: 'Stolthed',            desc: 'Moralen stiger 2 pr. sol.', moral: 2 },
+  fabrik:      { name: 'Fabrikkerne først',   desc: 'Bygninger 15 % hurtigere, dyr 30 % langsommere.', build: 0.85, animal: 1.3 },
+  natur:       { name: 'Naturen først',       desc: 'Afgrøder og dyr 15 % hurtigere.', crop: 0.85, animal: 0.85 },
+  talsida:     { name: 'Ida er talsperson',   desc: 'Bygninger 10 % hurtigere.', build: 0.9 },
+  talsbo:      { name: 'Bo er talsperson',    desc: 'Afgrøder 10 % hurtigere.', crop: 0.9 },
+};
+// fx: credits, moral, xp, pop, items {vare: antal}, policy [id, sol], chain (næste dilemma)
+const COUNCIL = [
+  { id: 'filter', who: 'ida', level: 3, text: 'Støvet er kommet ind i luftfiltrene igen. Jeg kan rense dem, men det koster reservedele. Eller vi kører videre og hoster lidt.',
+    a: { label: 'Rens filtrene', fx: { credits: -150, policy: ['rentfilter', 3] } }, b: { label: 'Kør videre', fx: { moral: -10 } } },
+  { id: 'froe', who: 'bo', level: 3, text: 'Jeg fandt en pose frø i en gammel fragtkasse. Der står ingen afsender på. Skal jeg plante dem?',
+    a: { label: 'Plant dem', fx: { items: { svamp: 6 }, chain: 'froe2' } }, b: { label: 'Destruér dem', fx: { moral: 3, xp: 10 } } },
+  { id: 'froe2', who: 'bo', level: 99, text: 'Frøene er blevet til en plante, der lyser i mørke. Dina er bekymret. Jeg synes, den er smuk.',
+    a: { label: 'Undersøg den', fx: { items: { krystal: 2 }, moral: -5 } }, b: { label: 'Kompostér den', fx: { policy: ['groenjord', 3] } } },
+  { id: 'fest', who: 'kim', level: 3, text: 'Mandskabet på Ørnen har fløjet i syv måneder. De fortjener en fest. Den bliver dyr, men den bliver god.',
+    a: { label: 'Hold fest', fx: { credits: -300, policy: ['fest', 2] } }, b: { label: 'Spar pengene', fx: { moral: -5 } } },
+  { id: 'overtid', who: 'ida', level: 4, text: 'Fragtskibene står i kø. Hvis alle tager en ekstra vagt, kan vi følge med. Men folk er allerede trætte.',
+    a: { label: 'Indfør overarbejde', fx: { policy: ['overarbejde', 2] } }, b: { label: 'Giv alle en fridag', fx: { moral: 8 } } },
+  { id: 'is', who: 'ida', level: 4, text: 'Vi har ramt en isåre under kolonien. Vi kan pumpe den op nu eller forsegle den som reserve.',
+    a: { label: 'Pump den op', fx: { items: { vand: 15 } } }, b: { label: 'Forsegl den', fx: { policy: ['reserve', 4] } } },
+  { id: 'gertrud', who: 'bo', level: 4, text: 'Gertrud er sluppet ud i vandtanken. Hun har det fantastisk. Vandet smager lidt grønt.',
+    a: { label: 'Lad hende blive', fx: { items: { alge: 10 }, moral: 3 } }, b: { label: 'Rens tanken', fx: { items: { vand: 6 } } } },
+  { id: 'strom', who: 'ida', level: 5, text: 'Strømmen slår ikke til de næste par sol. Hvem skal have den?',
+    a: { label: 'Fabrikkerne', fx: { policy: ['fabrik', 2] } }, b: { label: 'Dyr og kupler', fx: { policy: ['natur', 2] } } },
+  { id: 'ration', who: 'dina', level: 5, text: 'Madlageret er lavere, end jeg bryder mig om. Vi kan rationere, eller vi kan købe en nødforsyning fra Jorden.',
+    a: { label: 'Rationér', fx: { policy: ['rationering', 3] } }, b: { label: 'Køb nødforsyning', fx: { credits: -250, items: { gryde: 6 } } } },
+  { id: 'kat', who: 'kim', level: 5, text: 'Kaptajn Mis er stukket af i lastrummet. Hun har vist fundet noget. Skal vi lede efter hende?',
+    a: { label: 'Led efter hende', fx: { credits: -60, items: { krystal: 1 } } }, b: { label: 'Hun kommer nok selv', fx: { moral: -2, xp: 8 } } },
+  { id: 'flygt', who: 'kim', level: 6, text: 'Et skib fra en forladt forpost beder om husly. Der er tre kolonister om bord, og de har ikke meget med.',
+    a: { label: 'Tag imod dem', fx: { pop: 3, moral: 5 } }, b: { label: 'Giv dem brændstof og vink farvel', fx: { credits: 150, moral: -8 } } },
+  { id: 'medicin', who: 'dina', level: 6, text: 'Jeg vil teste et nyt lægemiddel mod Mars-træthed. Det kræver penge og en del alger.',
+    a: { label: 'Giv hende midlerne', fx: { credits: -200, items: { alge: -4 }, policy: ['medicin', 4] } }, b: { label: 'Ikke nu', fx: { xp: 15 } } },
+  { id: 'tv', who: 'kim', level: 7, text: 'Et tv-hold fra Jorden vil sende direkte fra kolonien. Det er god reklame, men de vil filme alt.',
+    a: { label: 'Vis kolonien frem', fx: { policy: ['beroemt', 3], moral: -3 } }, b: { label: 'Sig nej tak', fx: { moral: 5 } } },
+  { id: 'museum', who: 'dina', level: 8, text: 'Et museum på Jorden vil købe rettighederne til billeder af vores fund. Nogle synes, det er at sælge ud.',
+    a: { label: 'Sælg rettighederne', fx: { credits: 700, moral: -6 } }, b: { label: 'Behold dem', fx: { policy: ['stolthed', 4] } } },
+  { id: 'valg', who: 'dina', level: 9, text: 'Kolonien skal vælge en talsperson. Ida og Bo stiller op. Hvem stemmer du på?',
+    a: { label: 'Ida', fx: { policy: ['talsida', 5] } }, b: { label: 'Bo', fx: { policy: ['talsbo', 5] } } },
+];
+
+// ---------- Version 10: gen-lab ----------
+// Kryds to afgrøder. Moderafgrøden får en egenskab, som afhænger af faderen.
+const TRAITS = {
+  hurtig:    { name: 'Hurtig',  desc: 'Gror 25 % hurtigere.' },
+  rig:       { name: 'Rig',     desc: 'Giver 1 ekstra ved høst.' },
+  haardfoer: { name: 'Hårdfør', desc: 'Tåler støvstorme og vinterkulde.' },
+  soed:      { name: 'Sød',     desc: 'Giver kreditter ved høst.' },
+};
+const GENE = { seeds: 5, credits: 80, min: 6, max: 2 };
+
+// ---------- Version 10: specialister ----------
+// Ida, Bo, Kim og Dina kan sættes på en post. Arbejde trætter, og hvile giver kræfterne tilbage.
+const CREW_LEVEL = 4;
+const CREW = {
+  ida:  { role: 'Ingeniør',  posts: ['b'],              desc: 'Bygningen, hun passer, producerer 30 % hurtigere.' },
+  bo:   { role: 'Botaniker', posts: ['plot', 'empty'],  desc: 'Kupler omkring ham gror 30 % hurtigere.' },
+  kim:  { role: 'Pilot',     posts: ['pad', 'garage'],  desc: 'Ved landingspladsen betaler ordrer 15 % mere. Ved rovergaragen kører roveren 30 % hurtigere.' },
+  dina: { role: 'Læge',      posts: ['habitat', 'lab'], desc: 'Ved et habitat stiger moralen 4 pr. sol. Ved labbet går forskningen 25 % hurtigere.' },
+};
+const CREW_WORK = 25, CREW_REST = 50; // energi pr. sol
+
+// ---------- Version 10: livszonen ----------
+// Liv breder sig fra kupler, bioreaktorer og træer. Grøn jord får afgrøder til at gro hurtigere.
+const LIFE_SOURCE = { plot: 1.5, crop: 3, bioreaktor: 5, habitat: 1, pen: 1.5, genlab: 2, 'deco-trae': 4 };
+const LIFE_SOW = { alge: 3 };
+
+// ---------- Version 10: Marsvejr ----------
+const DEVIL = { level: 3, ms: 24000 };
+const FLARE = { level: 6, warn: 30000, ms: 60000 };
