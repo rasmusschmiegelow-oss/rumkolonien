@@ -97,6 +97,11 @@ const BUILDINGS = {
   garage:        { name: 'Rovergarage',    level: 7,  cost: 1000, recipes: [], garage: true, desc: 'Send roveren på ekspedition efter krystaller og artefakter.' },
   lab:           { name: 'Forskningslab',  level: 8,  cost: 1500, recipes: [], lab: true, desc: 'Forsk i teknologier, der gør kolonien bedre for altid.' },
   krystalbor:    { name: 'Krystalbor',     level: 7,  cost: 2000, recipes: ['krystal'], needs: 'crystal', desc: 'Kan kun bygges på en krystalåre.' },
+  solpanel:      { name: 'Solpanel',       level: 2,  cost: 120,  recipes: [], multi: true, power: true, desc: 'Giver strøm om dagen. Mindre om vinteren og i støvstorme.' },
+  vindmolle:     { name: 'Vindmølle',      level: 4,  cost: 300,  recipes: [], multi: true, power: true, desc: 'Giver strøm døgnet rundt og meget mere i støvstorme.' },
+  batteribank:   { name: 'Batteribank',    level: 7,  cost: 800,  recipes: [], multi: true, power: true, items: { batteri: 3 }, desc: 'Gemmer solstrøm og giver den tilbage om natten og i storme.' },
+  habitat:       { name: 'Habitat',        level: 3,  cost: 400,  recipes: [], multi: true, desc: 'Boliger til 6 kolonister mere.' },
+  monolit:       { name: 'Monolitten',     level: 9,  cost: 3000, recipes: [], monolith: true, desc: 'De Førstes efterladenskab. Kan bøje tiden én gang i døgnet.' },
   vinkaelder:    { name: 'Vinkælder',      level: 14, cost: 2500, recipes: ['vin'] },
 };
 const QUEUE_MAX = 3;
@@ -157,6 +162,10 @@ const MEDALS = [
   { id: 'phobos', name: 'Månekolonist',     desc: 'Start en ny koloni på Phobos.',          test: () => S.prestige >= 1, reward: 1000 },
   { id: 'post',  name: 'Postmester',         desc: 'Sælg en vare til en anden spiller.',    test: () => S.stats.postSold >= 1, reward: 150 },
   { id: 'pet',   name: 'Bølles bedste ven',  desc: 'Lad Bølle finde 20 ting.',               test: () => S.stats.petFinds >= 20, reward: 300 },
+  { id: 'terra', name: 'Terraformer',        desc: 'Bidrag med 1000 point til terraformingen.', test: () => (S.terraMine || 0) >= 1000, reward: 500 },
+  { id: 'map',   name: 'Kortlægger',         desc: 'Udforsk 15 sektorer af Mars.',          test: () => Object.keys(S.explore.done).length >= 15, reward: 400 },
+  { id: 'myst',  name: 'De Førstes arv',     desc: 'Byg Monolitten.',                       test: () => owns('monolit'), reward: 1500 },
+  { id: 'pop',   name: 'Lille by',           desc: 'Nå 20 indbyggere.',                     test: () => S.pop.n >= 20, reward: 400 },
   { id: 'fest',  name: 'Festabe',            desc: 'Sæt festivalpynt op.',                  test: () => S.tiles.some((t) => t.t === 'deco' && DECOR[t.id].fest), reward: 150 },
 ];
 
@@ -364,3 +373,63 @@ const prestigePay = (n) => 0.1 * n;                    // +10 % for ordrer pr. s
 const prestigeGrowth = (n) => Math.max(0.75, 1 - 0.05 * n); // afgrøder gror 5 % hurtigere pr. stjerne
 // Bølle finder noget nyt hvert 6.-12. minut.
 const PET_LEVEL = 2;
+
+// ---------- Version 8: terraforming ----------
+// Hele planetens fælles fremskridt (point fra alle spillere i Supabase).
+const TERRA_STAGES = [
+  { at: 0,     name: 'Rød og død',     desc: 'En tynd atmosfære af kuldioxid og minus 60 grader.' },
+  { at: 500,   name: 'Tyndt slør',     desc: 'Atmosfæren bliver tykkere, og himlen får et blåt skær.' },
+  { at: 2500,  name: 'Lav på klipperne', desc: 'De første lav vokser uden for kuplerne. Afgrøder gror 5 % hurtigere.' },
+  { at: 10000, name: 'Smeltevand',     desc: 'Iskraterne bliver til små søer. Afgrøder gror 10 % hurtigere.' },
+  { at: 30000, name: 'Grønne sletter', desc: 'Græs breder sig over sletterne. Dyrene producerer 15 % hurtigere.' },
+  { at: 80000, name: 'Blå planet',     desc: 'Mars har blå himmel og regn igen. Alt går 15 % hurtigere.' },
+];
+const TERRA_ITEMS = { ilt: 3, vand: 1, alge: 1, krystal: 20 };
+
+// ---------- Version 8: energi ----------
+// Forbrug i kW pr. felt. Producenter står i BUILDINGS med power: true.
+const POWER_USE = { b: 2, lab: 3, krystalbor: 4, garage: 1, skjold: 2, pen: 1, habitat: 1 };
+const landerPower = (lvl) => 6 + lvl; // landingsfartøjets reaktor
+
+// ---------- Version 8: udforskning ----------
+// Et kort over Mars i 7 x 5 sektorer. Kolonien ligger i midten.
+const SECTOR_TYPES = {
+  home:    { name: 'Kolonien',      icon: 'rocket' },
+  krater:  { name: 'Krater',        icon: 'jern',     loot: [['jern', 3, 6, 1], ['krystal', 1, 1, 0.25]] },
+  isfelt:  { name: 'Isfelt',        icon: 'iskrater', loot: [['vand', 8, 15, 1], ['ilt', 2, 4, 0.5]] },
+  krystal: { name: 'Krystalfelt',   icon: 'krystal',  loot: [['krystal', 1, 3, 1]] },
+  vrag:    { name: 'Vrag',          icon: 'vrag',     loot: [['batteri', 1, 2, 1], ['stof', 1, 1, 0.4], ['coin', 200, 600, 1]] },
+  ruin:    { name: 'Ruin',          icon: 'ruin',     loot: [['artefakt', 1, 1, 1], ['krystal', 1, 2, 0.6]] },
+  vulkan:  { name: 'Vulkan',        icon: 'vulkan',   loot: [['jern', 4, 8, 1], ['krystal', 1, 2, 0.7], ['artefakt', 1, 1, 0.3]] },
+  storm:   { name: 'Stormfelt',     icon: 'storm',    loot: [['jern', 1, 2, 0.5]] },
+};
+const SECTORS_W = 7, SECTORS_H = 5, SECTOR_HOME = 2 * 7 + 3;
+// Rækkefølge: rækker fra nord til syd. Navngivne steder fra rigtige Mars-kort.
+const SECTORS = [
+  ['isfelt', 'Nordpolens iskappe'], ['krater', ''], ['vrag', 'Phoenix-landeren'], ['isfelt', 'Utopia Planitia'], ['storm', ''], ['krystal', ''], ['isfelt', ''],
+  ['krater', ''], ['ruin', 'Cydonia'], ['krater', ''], ['vrag', 'Viking 1'], ['ruin', ''], ['krater', 'Jezero-krateret'], ['storm', ''],
+  ['vulkan', 'Olympus Mons'], ['krystal', ''], ['krater', 'Gale-krateret'], ['home', 'Kolonien'], ['krater', ''], ['vrag', 'Opportunity'], ['krystal', ''],
+  ['storm', ''], ['krystal', 'Valles Marineris'], ['vulkan', 'Arsia Mons'], ['krater', ''], ['ruin', 'Hellas-bassinet'], ['krater', ''], ['vulkan', 'Elysium Mons'],
+  ['isfelt', ''], ['storm', ''], ['krater', ''], ['isfelt', 'Sydpolens iskappe'], ['krystal', ''], ['storm', ''], ['ruin', 'Argyre'],
+].map(([type, name], i) => ({ i, type, name: name || SECTOR_TYPES[type].name }));
+const sectorDist = (i) => Math.abs((i % SECTORS_W) - (SECTOR_HOME % SECTORS_W)) + Math.abs(Math.floor(i / SECTORS_W) - Math.floor(SECTOR_HOME / SECTORS_W));
+const sectorTrip = (i) => ({ min: 4 * Math.max(1, sectorDist(i)), cost: { braendstof: Math.max(1, sectorDist(i)), ...(sectorDist(i) >= 3 ? { gryde: 2 } : {}) } });
+const REVISIT_MS = 6 * 60 * 60 * 1000;
+
+// ---------- Version 8: Mars-mysteriet ----------
+const MYSTERY = [
+  { who: 'dina', text: 'Signalet er en tælling. 2, 3, 5, 7, 11 ... primtal. Nogen ville vise, at de kunne regne.' },
+  { who: 'ida',  text: 'Det er et kort over solsystemet. Men Mars har have, og Jorden er dækket af is. Kortet er over en milliard år gammelt.' },
+  { who: 'dina', text: 'De kaldte sig noget, vi bedst kan oversætte til "De Første". De boede her, da Mars var blå.' },
+  { who: 'bo',   text: 'Da atmosfæren forsvandt, byggede de kupler som vores. Men de kunne ikke holde på varmen.' },
+  { who: 'kim',  text: 'De sendte frø ud i rummet. Nogle af dem landede måske på en ung, blå planet tæt ved solen.' },
+  { who: 'ida',  text: 'Det sidste fragment er en byggevejledning til noget, der kan bøje tiden. De efterlod den til dem, der kom efter.' },
+];
+const DECODE = { cost: { artefakt: 1, krystal: 2 }, min: 15 };
+const MONOLITH_DONE = 'Monolitten summer. Mars husker, hvordan det var at være levende. Nu er det vores tur.';
+
+// ---------- Version 8: befolkning og livsstøtte ----------
+// Landingsfartøjet holder 4 kolonister i live. Flere kræver habitater, ilt og mad hver sol.
+const POP_BASE = 4, POP_PER_HABITAT = 6;
+const FOOD = { aeg: 1, maelk: 1, gryde: 2, broed: 2, ost: 2, pandekage: 3, suppe: 4, pizza: 4, taerte: 4, latte: 1 };
+const FOOD_BASIC = ['aeg', 'maelk', 'gryde', 'broed'];

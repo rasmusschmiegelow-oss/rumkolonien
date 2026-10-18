@@ -138,7 +138,9 @@ const Cloud = (() => {
     claimGifts();
     checkWeekPrize();
     collectSales(true);
+    terraStatus();
     setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY) { lastPush = Date.now(); push(); checkWeekPrize(); } }, 5000);
+    setInterval(terraStatus, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', () => { if (document.hidden) push(false, true); });
     // Et link indsat i samme fane ændrer kun #-delen, så siden genindlæses ikke.
     window.addEventListener('hashchange', () => { fromLink(); });
@@ -158,6 +160,25 @@ const Cloud = (() => {
       toast(`${icon('rumposten')} Du har solgt ${r.count} ${r.count === 1 ? 'annonce' : 'annoncer'} i Rumposten: +${r.credits} ${icon('coin')}`, 'good', 5000);
       return r.credits;
     } catch (e) { if (!quiet) toast('Rumposten kan ikke nås lige nu.', 'bad'); return 0; }
+  }
+
+  // Planetens fælles terraforming. Gemmes i S, så trinnet også virker uden net.
+  let terraCache = null;
+  async function terraStatus() {
+    try {
+      const r = await rpc('terraform_status', { p_key: key });
+      if (r) {
+        S.terraTotal = Number(r.total) || 0;
+        S.terraMine = Number(r.mine) || 0;
+        terraCache = r;
+        const after = terraStage();
+        if (S.terraSeen != null && after > S.terraSeen) {
+          toast(`${icon('terraform')} Mars har nået et nyt trin: <b>${TERRA_STAGES[after].name}</b>. ${TERRA_STAGES[after].desc}`, 'good', 6000);
+        }
+        S.terraSeen = after;
+      }
+      return r;
+    } catch (e) { return terraCache; }
   }
 
   // Hjælp fra naboer, mens man var væk.
@@ -204,6 +225,12 @@ const Cloud = (() => {
       cancel: (id) => rpc('market_cancel', { p_key: key, p_id: id }),
     },
     collectSales,
+    terraStatus,
+    async terraContribute(items) {
+      const r = await rpc('terraform_contribute', { p_key: key, p_ilt: items.ilt || 0, p_vand: items.vand || 0, p_alge: items.alge || 0, p_krystal: items.krystal || 0 });
+      if (r && r.ok) { S.terraTotal = r.total; S.terraMine = r.mine; }
+      return r;
+    },
     visit: (id) => rpc('visit_colony', { p_id: id }),
     help: (id) => rpc('help_colony', { p_key: key, p_id: id }),
     get key() { return key; },

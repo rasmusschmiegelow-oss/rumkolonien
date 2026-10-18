@@ -53,6 +53,9 @@ function onTile(idx) {
     case 'b':
       if (BUILDINGS[tile.id].garage) return openGarage(idx);
       if (BUILDINGS[tile.id].lab) return openLab(idx);
+      if (BUILDINGS[tile.id].monolith) return openMonolith();
+      if (BUILDINGS[tile.id].power) return openEnergy();
+      if (tile.id === 'habitat') return openPop();
       collect(idx);
       return openBuilding(idx);
     case 'pen': return tapPen(idx);
@@ -232,7 +235,15 @@ function openLab(idx) {
         : `<button class="primary" data-act="research" data-arg="${id}" ${ok ? '' : 'disabled'}>${r.credits} ${icon('coin', 'ic-s')}</button>`}
     </div>`;
   }).join('');
-  showModal(`${icon('lab')} Forskningslab`, `${head}<p class="muted tip">Forskning koster krystaller og artefakter fra roverens ekspeditioner. Fordelene gælder for altid.</p><div class="list">${rows}</div>`);
+  const m = S.mystery;
+  const myst = `<div class="section-title">Mars-mysteriet · ${m.n}/${MYSTERY.length} fragmenter</div>
+    <div class="row myst">${icon('fragment', 'ic-l')}<div class="info">${m.active
+      ? `<b>Afkoder fragment ${m.n + 1}</b><div class="pbar"><div style="width:${Math.min(100, (Date.now() - m.active.start) / (m.active.end - m.active.start) * 100)}%"></div></div><small>Færdig om <span data-until="${m.active.end}"></span></small>`
+      : m.n >= MYSTERY.length ? '<b>Signalet er afkodet</b><small>Byg Monolitten, hvis du ikke allerede har gjort det.</small>'
+      : `<b>Afkod et fragment af signalet fra De Første</b><small>Kræver et artefakt fra ruiner eller udforskning. ${DECODE.min} min.</small><div class="needs">${needList(DECODE.cost)}</div>`}</div>
+      ${!m.active && m.n < MYSTERY.length ? `<button class="primary" data-act="decode" ${Object.entries(DECODE.cost).every(([it, q]) => have(it) >= q) ? '' : 'disabled'}>Afkod</button>` : ''}</div>
+    ${m.n ? `<details class="journal-box"><summary>Læs de afkodede fragmenter</summary><ol class="journal">${MYSTERY.slice(0, m.n).map((f) => `<li><b>${COLONISTS[f.who].name}:</b> ${f.text}</li>`).join('')}</ol></details>` : ''}`;
+  showModal(`${icon('lab')} Forskningslab`, `${head}${myst}<div class="section-title">Forskning</div><p class="muted tip">Forskning koster krystaller og artefakter fra roverens ekspeditioner. Fordelene gælder for altid.</p><div class="list">${rows}</div>`);
 }
 
 function openDecor(idx) {
@@ -242,37 +253,142 @@ function openDecor(idx) {
     <button class="wide" data-act="removedeco" data-idx="${idx}">Fjern og få ${Math.round(d.cost / 2)} ${icon('coin', 'ic-s')} tilbage</button>`);
 }
 
-function openGarage(idx) {
+function openGarage() {
   const x = S.expedition;
   if (x && Date.now() >= x.end) {
     const res = finishExpedition();
-    const list = res.found.map(([it, n]) => `<span>${icon(it)} ${n} × ${ITEMS[it].name}</span>`).join('');
+    const list = res.found.map(([it, n]) => `<span>${icon(it)} ${n} × ${it === 'coin' ? 'kreditter' : ITEMS[it].name}</span>`).join('');
     showModal(`${icon('rover')} Roveren er tilbage!`, `
-      <p>Fra ${res.e.name} har roveren fundet:</p>
+      <p>Fra <b>${res.e.name}</b> har roveren fundet:${res.first ? ' <span class="up">Ny sektor kortlagt!</span>' : ''}</p>
       <div class="unlocks">${list || '<span>Kun støv denne gang</span>'}</div>
-      <p class="muted small">Krystaller og artefakter kan sælges dyrt på lageret.</p>
-      <button class="primary wide" data-act="close">Fantastisk</button>`);
+      <button class="primary wide" data-act="explore">Se kortet</button>`);
     return;
   }
-  if (x) {
-    const e = EXPEDITIONS.find((y) => y.id === x.id);
-    showModal(`${icon('garage')} Rovergarage`, `
-      <div class="row"><div class="ico">${icon('rover')}</div><div class="info"><b>På vej til ${e.name}</b>
-      <small>Tilbage om <span data-until="${x.end}"></span></small></div></div>`);
-    return;
-  }
-  const rows = EXPEDITIONS.map((e) => {
-    const locked = e.level > S.level;
-    const ok = !locked && Object.entries(e.cost).every(([it, q]) => have(it) >= q);
-    const loot = e.loot.map(([it, , , ch]) => `${icon(it, 'ic-s')}${ch < 1 ? ` ${Math.round(ch * 100)} %` : ''}`).join(' ');
-    return `<div class="row ${locked ? 'locked' : ''}">
-      <div class="ico">${icon('rover')}</div>
-      <div class="info"><b>${e.name}</b><small>${locked ? `Låses op på niveau ${e.level}` : `${e.desc} · ${fmtTime(e.time)} · fund: ${loot}`}</small>
-      ${locked ? '' : `<div class="needs">${needList(e.cost)}</div>`}</div>
-      <button class="primary" data-act="expedition" data-arg="${e.id}" ${ok ? '' : 'disabled'}>Send</button>
-    </div>`;
+  openExplore();
+}
+
+function openExplore(sel) {
+  const x = S.expedition, now = Date.now();
+  const cells = SECTORS.map((sec) => {
+    const seen = sectorSeen(sec.i), done = S.explore.done[sec.i], home = sec.i === SECTOR_HOME;
+    const here = x && x.sector === sec.i;
+    const cls = ['sector', seen ? 'seen' : 'fog', done ? 'done' : '', home ? 'home' : '', sel === sec.i ? 'sel' : '', here ? 'here' : ''].join(' ');
+    return `<button class="${cls}" data-act="sector" data-arg="${sec.i}" ${seen ? '' : 'disabled'} title="${seen ? sec.name : 'Ukendt'}">
+      ${seen ? icon(SECTOR_TYPES[sec.type].icon, 'ic-m') : '<span class="q">?</span>'}${here ? icon('rover', 'rv') : ''}${done && !home ? '<i>✓</i>' : ''}</button>`;
   }).join('');
-  showModal(`${icon('garage')} Rovergarage`, `<p class="muted tip">Roveren skal have brændstof og proviant med.</p><div class="list">${rows}</div>`);
+  let panel = '';
+  if (x && x.sector != null) {
+    panel = `<div class="row"><div class="ico">${icon('rover')}</div><div class="info"><b>På vej til ${SECTORS[x.sector].name}</b><small>Tilbage om <span data-until="${x.end}"></span></small></div></div>`;
+  } else if (sel != null && sel !== SECTOR_HOME) {
+    const sec = SECTORS[sel], type = SECTOR_TYPES[sec.type], trip = sectorTrip(sel), ready = sectorReady(sel, now);
+    const first = !S.explore.done[sel];
+    const loot = type.loot.map(([it, , , ch]) => `${icon(it, 'ic-s')}${ch < 1 ? ` ${Math.round(ch * 100)} %` : ''}`).join(' ');
+    const ok = owns('garage') && ready && Object.entries(trip.cost).every(([it, q]) => have(it) >= q);
+    panel = `<div class="row"><div class="ico">${icon(type.icon)}</div>
+      <div class="info"><b>${sec.name}</b><small>${type.name} · ${fmtTime(trip.min * 60 * (hasTech('rover') ? 0.6 : 1))} · fund: ${loot}${first ? '' : ' · halvt udbytte ved genbesøg'}${ready ? '' : ` · klar om ${fmtTime((S.explore.done[sel] + REVISIT_MS - now) / 1000)}`}</small>
+      <div class="needs">${needList(trip.cost)}</div></div>
+      <button class="primary" data-act="sendrover" data-arg="${sel}" ${ok ? '' : 'disabled'}>Send</button></div>`;
+  } else {
+    panel = `<p class="muted small">Tryk på en sektor ved siden af det kortlagte område. Hver sektor, du udforsker, afslører naboerne. Navngivne steder er rigtige steder på Mars.</p>`;
+  }
+  const doneN = Object.keys(S.explore.done).length;
+  showModal(`${icon('rover')} Udforsk Mars`, `
+    <p class="muted small">${doneN} af ${SECTORS.length - 1} sektorer kortlagt${owns('garage') ? '' : ' · Byg en rovergarage for at sende roveren ud'}</p>
+    <div class="mars-map">${cells}</div>${panel}`);
+}
+
+// ---------- Terraforming, energi, befolkning, mysteriet ----------
+async function openTerraform() {
+  const draw = (r) => {
+    const total = S.terraTotal || 0, st = terraStage(total), next = TERRA_STAGES[st + 1];
+    const pct = next ? (total - TERRA_STAGES[st].at) / (next.at - TERRA_STAGES[st].at) * 100 : 100;
+    const stages = TERRA_STAGES.map((t, i) => `<div class="tstage ${i <= st ? 'on' : ''}"><b>${i}</b><span>${t.name}</span></div>`).join('');
+    const top = r && r.top ? r.top.map((p, i) => `<div class="lb-row ${p.me ? 'me' : ''}"><span class="lb-place">${i + 1}</span><span class="lb-name">${escapeHtml(p.name)}</span><span class="lb-score">${p.points} <small>point</small></span></div>`).join('') : '';
+    const inputs = Object.entries(TERRA_ITEMS).map(([id, pts]) => `<label class="tin">${icon(id)}<span>${ITEMS[id].name}<small>${pts} point · du har ${have(id)}</small></span>
+      <input type="number" min="0" max="${Math.min(id === 'krystal' ? 50 : 500, have(id))}" value="0" data-terra="${id}"></label>`).join('');
+    showModal(`${icon('terraform')} Terraforming af Mars`, `
+      <p class="small">Alle kolonister på Mars arbejder sammen om at give planeten liv igen. Ilt, vand, alger og krystaller gør atmosfæren tykkere og varmere. Når Mars når et nyt trin, ændrer det sig for alle spillere.</p>
+      <div class="terra-now"><b>Trin ${st}: ${TERRA_STAGES[st].name}</b><small>${TERRA_STAGES[st].desc}</small>
+        <div class="pbar big"><div style="width:${pct}%"></div></div>
+        <small>${total.toLocaleString('da-DK')} point${next ? ` · ${(next.at - total).toLocaleString('da-DK')} til "${next.name}"` : ' · Mars er blå igen!'}${r && r.players ? ` · ${r.players} kolonister har bidraget` : ''}</small></div>
+      <div class="tstages">${stages}</div>
+      <div class="section-title">Dit bidrag · ${(S.terraMine || 0).toLocaleString('da-DK')} point</div>
+      <div class="terra-form">${inputs}</div>
+      <p class="muted small">Du får 20 % over markedsværdien for det, du giver, og erfaring. Højst 3000 point i timen.</p>
+      <button class="primary wide" data-act="terragive">Send til atmosfæren</button>
+      ${top ? `<div class="section-title">Største bidragydere</div><div class="lb">${top}</div>` : ''}`);
+  };
+  draw(null);
+  const r = await Cloud.terraStatus();
+  if (!modal.hidden && $('modalTitle').textContent.includes('Terraforming')) draw(r);
+}
+
+async function terraGive() {
+  const items = {};
+  document.querySelectorAll('[data-terra]').forEach((el) => { const n = Math.floor(Number(el.value) || 0); if (n > 0) items[el.dataset.terra] = Math.min(n, have(el.dataset.terra)); });
+  if (!Object.keys(items).length) return fail('Vælg hvor meget du vil give.');
+  try {
+    const r = await Cloud.terraContribute(items);
+    if (!r || !r.ok) return fail(r && r.reason === 'limit' ? `Du kan give ${r.left} point mere i denne time.` : 'Bidraget kunne ikke sendes.');
+    let value = 0;
+    for (const [id, n] of Object.entries(items)) { addItem(id, -n); value += ITEMS[id].value * n; }
+    const credits = Math.round(value * 1.2);
+    earn(credits); addXP(Math.max(1, Math.round(r.points / 10)));
+    save();
+    Sound.play('level');
+    toast(`${icon('terraform')} +${r.points} point til Mars. Du fik ${credits} ${icon('coin')}.`, 'good', 4000);
+    openTerraform();
+  } catch (e) { fail('Ingen forbindelse lige nu.'); }
+}
+
+function openEnergy() {
+  const p = powerStatus();
+  const ok = p.ratio >= 1;
+  const n = (id) => S.tiles.filter((t) => t.t === 'b' && t.id === id).length;
+  showModal(`${icon('energi')} Energinet`, `
+    <div class="terra-now ${ok ? '' : 'bad'}"><b>${p.prod} kW produceret · ${p.use} kW brugt</b>
+      <small>${ok ? 'Overskud: al produktion går 10 % hurtigere.' : `Underskud: produktion og dyr er ${Math.round((p.mult - 1) * 100)} % langsommere. Byg flere solpaneler eller vindmøller.`}</small></div>
+    <div class="list">
+      <div class="row"><div class="ico">${icon('rocket')}</div><div class="info"><b>Landingsfartøjets reaktor</b><small>${p.parts.lander} kW · vokser med dit niveau</small></div></div>
+      <div class="row"><div class="ico">${icon('solpanel')}</div><div class="info"><b>${n('solpanel')} solpaneler</b><small>${Math.round(p.parts.sol)} kW · solen giver ${Math.round(p.sun * 100)} % lige nu (nul om natten, mindre om vinteren og i storme)</small></div></div>
+      <div class="row"><div class="ico">${icon('vindmolle')}</div><div class="info"><b>${n('vindmolle')} vindmøller</b><small>${Math.round(p.parts.vind)} kW · vinden giver ${Math.round(p.wind * 100)} % (mest om natten og i støvstorme)</small></div></div>
+      <div class="row"><div class="ico">${icon('batteribank')}</div><div class="info"><b>${n('batteribank')} batteribanker</b><small>${Math.round(p.parts.batteri)} kW · aflader, når solen er svag</small></div></div>
+    </div>
+    <p class="muted small">Byg energi på ryddede felter. Hver bygning bruger 2 kW (mere når den er opgraderet), labbet 3, krystalboret 4, og dyr og habitater 1.</p>`);
+}
+
+function openPop() {
+  const need = popNeeds(), cap = popCap(), reserve = foodReserve();
+  const sols = need.food ? Math.floor(Math.min(reserve / need.food, need.ilt ? have('ilt') / need.ilt : Infinity)) : '∞';
+  const nextSol = (solIndex() + 1) * DAY_MS;
+  showModal(`${icon('befolkning')} Befolkning og livsstøtte`, `
+    <div class="terra-now ${S.pop.moral < 40 ? 'bad' : ''}"><b>${S.pop.n} af ${cap} kolonister · moral ${S.pop.moral} %</b>
+      <div class="pbar big"><div style="width:${S.pop.moral}%"></div></div>
+      <small>${S.pop.moral >= 60 ? (S.pop.n < cap ? 'Kolonisterne er glade, og der flytter flere ind hver sol.' : 'Kolonisterne er glade. Byg et habitat for at få plads til flere.') : 'Moralen er lav. Ingen flytter ind, før alle får ilt og mad.'}</small></div>
+    <div class="list">
+      <div class="row"><div class="ico">${icon('ilt')}</div><div class="info"><b>${need.ilt} ilt pr. sol</b><small>Du har ${have('ilt')}. Bioreaktoren laver ilt af alger.</small></div></div>
+      <div class="row"><div class="ico">${icon('gryde')}</div><div class="info"><b>${need.food} madpoint pr. sol</b><small>Du har ${reserve} madpoint (${sols} sol). Æg og mælk giver 1, rumgryde og brød 2${S.pop.rich ? ', fine retter op til 4' : ''}.</small></div></div>
+      <div class="row"><div class="ico">${icon('box')}</div><div class="info"><b>Spis også fine retter</b><small>Suppe, pizza, tærte, pandekager, ost og latte. Ellers spises kun basisvarer.</small></div>
+        <button data-act="poprich">${S.pop.rich ? 'Til' : 'Fra'}</button></div>
+    </div>
+    <p class="muted small">Landingsfartøjet holder de første ${POP_BASE} i live. Hvert habitat giver plads til ${POP_PER_HABITAT} mere. Hver kolonist ud over de første 4 gør produktionen 1 % hurtigere (højst 20 %). Næste sol om <span data-until="${nextSol}"></span>.</p>`);
+}
+
+function showFragment(i) {
+  const f = MYSTERY[i];
+  showModal(`${icon('fragment')} Fragment ${i + 1} af ${MYSTERY.length}`, `
+    <div class="colonist"><div class="portrait">${icon('col-' + f.who, 'ic-xl')}</div><div class="col-body"><b>${COLONISTS[f.who].name}</b><p class="quote big">“${f.text}”</p></div></div>
+    ${i + 1 >= MYSTERY.length ? '<p><b>Alle fragmenter er afkodet.</b> Nu kan du bygge Monolitten på et ryddet felt.</p>' : ''}
+    <button class="primary wide" data-act="close">Videre</button>`);
+}
+
+function openMonolith() {
+  const today = dayStr(new Date()), used = S.timewave === today;
+  const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
+  showModal(`${icon('monolit')} Monolitten`, `
+    <p class="quote big">“${MONOLITH_DONE}”</p>
+    <div class="terra-now"><b>Tidsbølgen</b><small>Én gang i døgnet kan Monolitten gøre alle afgrøder modne og alle bygninger og dyr færdige på én gang.</small></div>
+    <button class="primary wide" data-act="timewave" ${used ? 'disabled' : ''}>${used ? `Klar igen om <span data-until="${tomorrow.getTime()}"></span>` : 'Udløs tidsbølgen'}</button>`);
 }
 
 function orderCard(o, i) {
@@ -395,10 +511,13 @@ function openBuild(idx) {
   const sp = S.specials[idx];
   if (sp) rows = `<div class="row special"><div class="ico">${icon(SPECIALS[sp].sprite)}</div><div class="info"><b>${SPECIALS[sp].name}</b><small>${SPECIALS[sp].desc}</small></div></div>` + rows;
   for (const [id, b] of Object.entries(BUILDINGS)) {
-    const built = owns(id), locked = b.level > S.level;
-    const wrongGround = b.needs && sp !== b.needs;
-    const what = wrongGround ? `Kan kun bygges på en ${SPECIALS[b.needs].name.toLowerCase()}`
-      : b.recipes.length ? 'Laver ' + b.recipes.map((r) => ITEMS[r].name.toLowerCase()).join(', ') : b.desc;
+    const built = !b.multi && owns(id), locked = b.level > S.level;
+    const wrongGround = (b.needs && sp !== b.needs) || (b.monolith && S.mystery.n < MYSTERY.length);
+    const extra = Object.entries(b.items || {}).map(([it, q]) => ` + ${q} ${ITEMS[it].name.toLowerCase()}`).join('');
+    const what = b.monolith && S.mystery.n < MYSTERY.length ? `Kræver alle 6 fragmenter afkodet (${S.mystery.n}/6)`
+      : wrongGround ? `Kan kun bygges på en ${SPECIALS[b.needs].name.toLowerCase()}`
+      : !b.recipes.length ? b.desc + extra
+      : 'Laver ' + b.recipes.map((r) => ITEMS[r].name.toLowerCase()).join(', ');
     rows += `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(id)}</div>
       <div class="info"><b>${b.name}</b><small>${built ? 'Allerede bygget' : locked ? `Låses op på niveau ${b.level}` : what}</small></div>
@@ -899,6 +1018,9 @@ document.addEventListener('click', (e) => {
       if (a.act === 'arcade') return openArcade();
       if (a.act === 'missions') return openMissions();
       if (a.act === 'neighbors') return openNeighbors();
+      if (a.act === 'energy') return openEnergy();
+      if (a.act === 'pop') return openPop();
+      if (a.act === 'explore') return openExplore();
       if (a.act === 'pet') { closeModal(); camGoal = { x: pet.x, y: pet.y - 60 }; return; }
       closeModal();
       focusTile(a.idx);
@@ -948,6 +1070,16 @@ document.addEventListener('click', (e) => {
     case 'postbuy': return postBuy(Number(arg), Number(btn.dataset.price), Number(btn.dataset.qty));
     case 'postcancel': return postCancel(Number(arg));
     case 'postcollect': Cloud.collectSales().then(() => openInventory('post-mine')); return;
+    case 'explore': Sound.play('click'); return openExplore();
+    case 'sector': Sound.play('click'); return openExplore(Number(arg));
+    case 'sendrover': if (startSector(Number(arg))) openExplore(); return;
+    case 'terra': Sound.play('click'); return openTerraform();
+    case 'terragive': return terraGive();
+    case 'energy': Sound.play('click'); return openEnergy();
+    case 'pop': Sound.play('click'); return openPop();
+    case 'poprich': S.pop.rich = !S.pop.rich; save(); return openPop();
+    case 'decode': if (startDecode()) openLab(); return;
+    case 'timewave': { const n = timeWave(); if (n !== false) { closeModal(); toast(`${icon('monolit')} Tidsbølgen skyllede over kolonien. ${n} ting er færdige.`, 'good', 5000); } return; }
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;
@@ -980,6 +1112,13 @@ function updateHUD() {
   setBadge('orderBadge', ready);
   setBadge('colonyBadge', claimableGoals());
   $('silo').textContent = `${invTotal()}/${cap()}`;
+  const pw = powerStatus();
+  $('powerNum').textContent = `${pw.prod}/${pw.use}`;
+  $('powerChip').classList.toggle('bad', pw.ratio < 1);
+  $('popChip').hidden = S.level < 2;
+  $('popNum').textContent = `${S.pop.n}/${popCap()}`;
+  $('popChip').classList.toggle('bad', S.pop.moral < 40);
+  $('terraNum').textContent = terraStage();
   const fest = isFestival();
   $('festChip').hidden = !fest;
   if (fest) $('festNum').textContent = S.tickets;

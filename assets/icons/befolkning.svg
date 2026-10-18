@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="display: inline-block">
+  <g>
+    <path d="M2 58c0-7 5-11 12-11s12 4 12 11z" fill="#4CB86A" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="14" cy="36" r="9" fill="#EEF1F4" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="14" cy="37" r="5.5" fill="#2F3340" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M38 58c0-7 5-11 12-11s12 4 12 11z" fill="#5BB8F0" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="50" cy="36" r="9" fill="#EEF1F4" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="50" cy="37" r="5.5" fill="#2F3340" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M16 60c0-9 7-14 16-14s16 5 16 14z" fill="#FF7A1A" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="32" cy="30" r="12" fill="#EEF1F4" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="32" cy="31" r="7.5" fill="#2F3340" stroke="#2A1A14" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <path d="M28 28c1-2 3-3 5-3" fill="none" stroke="#5BB8F0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

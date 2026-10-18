@@ -286,7 +286,30 @@ function drawTile(idx, now, t) {
   }
 }
 
+function drawTerraGround() {
+  const ts = terraStage();
+  if (ts < 2) return;
+  for (let i = 0; i < S.tiles.length; i++) {
+    const t = S.tiles[i];
+    const [x, y] = tileCenter(i);
+    if (ts >= 3 && S.specials && S.specials[i] === 'ice' && (t.t === 'empty' || t.t === 'locked')) {
+      ctx.fillStyle = 'rgba(91,184,240,0.75)'; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(x, y + 2, 26, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    if (t.t !== 'locked' && t.t !== 'empty') continue;
+    if (ts >= 4) { ctx.fillStyle = 'rgba(110, 170, 80, 0.35)'; diamond(x, y, TW + 1, TH + 1); ctx.fill(); }
+    ctx.fillStyle = ts >= 4 ? '#4CB86A' : '#9DB08A';
+    for (let k = 0; k < (ts >= 4 ? 6 : 3); k++) {
+      if (hash(i * 11 + k) < 0.45) continue;
+      const gx = x + (hash(i + k * 17) - 0.5) * 56, gy = y + (hash(i + k * 23) - 0.5) * 22;
+      ctx.beginPath(); ctx.ellipse(gx, gy, 3, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+      if (ts >= 4) { ctx.fillRect(gx - 0.5, gy - 5, 1.2, 5); }
+    }
+  }
+}
+
 function drawSeasonGround() {
+  drawTerraGround();
   const id = season().id;
   if (id === 'vinter') {
     ctx.fillStyle = 'rgba(235, 245, 255, 0.28)';
@@ -334,7 +357,10 @@ function tutorialTarget() {
 function drawSky(light, phase) {
   const g = ctx.createLinearGradient(0, 0, 0, viewH);
   const dusk = phase > 0.48 && phase < 0.64 ? 1 - Math.abs(phase - 0.56) / 0.08 : 0;
-  if (light > 0.9) { g.addColorStop(0, '#E9B48A'); g.addColorStop(1, '#C98A64'); }
+  const ts = terraStage();
+  if (light > 0.9 && ts >= 5) { g.addColorStop(0, '#7FB8E8'); g.addColorStop(1, '#BFDFF5'); }
+  else if (light > 0.9 && ts >= 1) { g.addColorStop(0, ts >= 3 ? '#B9C4D8' : '#D8B49A'); g.addColorStop(1, ts >= 3 ? '#D8C0A8' : '#C98A64'); }
+  else if (light > 0.9) { g.addColorStop(0, '#E9B48A'); g.addColorStop(1, '#C98A64'); }
   else if (dusk > 0) { g.addColorStop(0, '#4A3A6A'); g.addColorStop(0.7, '#5E8FC8'); g.addColorStop(1, '#8EB8E0'); }
   else { g.addColorStop(0, '#120D1C'); g.addColorStop(1, '#2A1E3F'); }
   ctx.fillStyle = g;
@@ -372,7 +398,7 @@ function drawNight(light, phase) {
       }
       if (tile.t !== 'plot' && tile.t !== 'b' && tile.t !== 'pad' && tile.t !== 'pen') return;
       const [x, y] = tileCenter(idx);
-      const col = tile.t === 'plot' ? '127,214,143' : tile.t === 'pad' ? '255,122,26' : '255,200,120';
+      const col = tile.t === 'plot' ? '127,214,143' : tile.t === 'pad' ? '255,122,26' : tile.id === 'monolit' ? '94,229,200' : '255,200,120';
       const g = ctx.createRadialGradient(x, y - 24, 4, x, y - 24, 62);
       g.addColorStop(0, `rgba(${col},${dark * 0.7})`); g.addColorStop(1, `rgba(${col},0)`);
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 24, 62, 0, Math.PI * 2); ctx.fill();
@@ -383,7 +409,18 @@ function drawNight(light, phase) {
 
 const dust = Array.from({ length: 70 }, (_, i) => ({ x: hash(i) , y: hash(i + 50), s: 0.5 + hash(i + 9) }));
 const flakes = Array.from({ length: 90 }, (_, i) => ({ x: hash(i + 300), y: hash(i + 400), s: 0.5 + hash(i + 500) }));
+function drawRain(now) {
+  if (terraStage() < 5 || season().id === 'vinter' || Math.sin(now / 60000) < 0.6) return;
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.strokeStyle = 'rgba(190,220,255,0.6)'; ctx.lineWidth = 1.5;
+  for (const f of flakes) {
+    const y = ((f.y + now / 1200 * f.s) % 1) * viewH, x = f.x * viewW;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 10); ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawSnow(now) {
+  drawRain(now);
   if (season().id !== 'vinter') return;
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

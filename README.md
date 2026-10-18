@@ -61,12 +61,22 @@ Spillet gemmes automatisk i browseren (`localStorage`).
 - **Phobos:** Når du har nået niveau 15, kan du starte en ny, grå koloni på Mars' måne. Hver rejse giver en stjerne med +10 % på alle ordrer og 5 % hurtigere vækst. Du beholder medaljer, missioner, statistik og festivalpynt.
 - **Bølle:** Idas lille drone flyver rundt på kortet og finder kreditter, råvarer, festbilletter og en sjælden gang krystaller eller artefakter. Tryk på den, når den har en taleboble.
 
+### Nyt i version 8: mere end en farm
+
+Version 8 skal gøre Rumkolonien til et spil om at overleve og forvandle en fremmed planet, ikke bare en gård på Mars.
+
+- **Fælles terraforming** *(Supabase)*: Alle spillere giver ilt, vand, alger og krystaller til én måler for hele planeten. Mars har 5 trin, fra "Tyndt slør" til "Blå planet". Hvert trin ændrer kortet for alle: lav, smeltevandssøer, græs og til sidst blå himmel og regn. Hvert trin gør også afgrøder, dyr eller bygninger hurtigere.
+- **Energinet:** Bygninger bruger strøm. Solpaneler virker kun om dagen og daler om vinteren og i støvstorme. Vindmøller giver mest om natten og i storme, og batteribanker aflader, når solen er svag. Overskud gør produktionen 10 % hurtigere, og underskud gør den op til 30 % langsommere.
+- **Udforsk Mars:** Roveren kører rundt på et kort over Mars i 7 × 5 sektorer med tåge. Hver sektor, du udforsker, afslører naboerne. Rigtige steder som Gale, Jezero, Viking 1, Opportunity, Valles Marineris og Olympus Mons har hver deres fund.
+- **Mars-mysteriet:** Artefakter afkodes i labbet til seks fragmenter af et signal fra "De Første". Når historien er fortalt, kan du bygge Monolitten. Én gang i døgnet sender den en Tidsbølge, der gør alt færdigt.
+- **Befolkning og livsstøtte:** Landingsfartøjet holder 4 kolonister i live. Habitater giver plads til flere, som skal have ilt og mad hver sol. Hvis alle får det, de skal bruge, stiger moralen, og nye flytter ind. Flere kolonister giver hurtigere produktion. Ingen dør, men lav moral gør kolonien langsommere.
+
 ### Sky og ranglister (Supabase)
 
 - **Sky-gemning:** Kolonien gemmes automatisk i Supabase hvert minut, og når appen lukkes. Under **?** finder du dit hemmelige link. Åbn det på en anden telefon eller computer for at spille videre der. Har en anden enhed gemt en nyere udgave, spørger spillet, hvilken du vil beholde.
 - **Ranglister:** niveau, asteroidejagt og medaljer under **Koloni → Rangliste**. Du vælger selv dit navn.
 
-Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem funktioner: `save_colony`, `load_colony`, `submit_score`, `get_leaderboard`, `list_neighbors`, `visit_colony`, `help_colony`, `claim_gifts` og Rumpostens `market_*`-funktioner. Et besøg viser kun navn, niveau og kortet, aldrig lager eller kreditter. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
+Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem funktioner: `save_colony`, `load_colony`, `submit_score`, `get_leaderboard`, `list_neighbors`, `visit_colony`, `help_colony`, `claim_gifts`, Rumpostens `market_*`-funktioner og `terraform_contribute`/`terraform_status`. Et besøg viser kun navn, niveau og kortet, aldrig lager eller kreditter. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
 
 ## Grafik
 

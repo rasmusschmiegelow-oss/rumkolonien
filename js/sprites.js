@@ -5,7 +5,7 @@
 const ICON_DIR = 'assets/icons/';
 const SPRITES = {};
 const SPRITE_NAMES = [
-  ...Object.keys(ITEMS), ...Object.keys(BUILDINGS), ...Object.keys(ANIMALS), 'hone', 'ged', 'rover', 'medalje', ...Object.keys(DECOR), 'moderskib', 'container', 'lykke', 'musik', 'musik-fra', 'boers', 'festbillet', 'flyt', 'klokke', 'joystick', 'asteroide', 'nabo', 'mission', 'pokal', 'foraar', 'sommer', 'efteraar', 'vinter', 'iskrater', 'krystalaare', 'ruin', 'rumposten', 'saml', 'kamera', 'phobos', 'boelle',
+  ...Object.keys(ITEMS), ...Object.keys(BUILDINGS), ...Object.keys(ANIMALS), 'hone', 'ged', 'rover', 'medalje', ...Object.keys(DECOR), 'moderskib', 'container', 'lykke', 'musik', 'musik-fra', 'boers', 'festbillet', 'flyt', 'klokke', 'joystick', 'asteroide', 'nabo', 'mission', 'pokal', 'foraar', 'sommer', 'efteraar', 'vinter', 'iskrater', 'krystalaare', 'ruin', 'rumposten', 'saml', 'kamera', 'phobos', 'boelle', 'terraform', 'energi', 'fragment', 'befolkning', 'vrag', 'vulkan',
   'plot', 'kuppel', 'pad', 'rock', 'sprout',
   'col-ida', 'col-bo', 'col-kim', 'col-dina', 'hoster', 'pakker',
   'rocket', 'coin', 'xp', 'box', 'goal', 'storm', 'meteor', 'gift', 'sun', 'moon', 'sound', 'mute',
