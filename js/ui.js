@@ -979,7 +979,8 @@ function openHelp() {
     ${installPrompt ? '<button class="primary" data-act="install">Installér som app</button>' : ''}</div>
     <div id="savebox"></div>
     <div class="section-title">Forfra</div>
-    <button data-act="reset">Start en ny koloni</button>`);
+    <button data-act="reset">Start en ny koloni</button>
+    <p class="small"><a href="${Native.on ? Native.SITE : ''}privatliv.html" target="_blank" rel="noopener">Privatlivspolitik</a> · Lyd fra Kenney.nl (CC0)</p>`);
 }
 
 // ---------- Version 10: kolonirådet ----------

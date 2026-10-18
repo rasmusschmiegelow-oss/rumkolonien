@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privatliv · Rumkolonien</title>
+  <meta name="theme-color" content="#120d1c">
+  <link rel="icon" href="assets/app-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #120d1c; --panel: #FBF6F1; --ink: #2A1A14; --muted: #7A5A4A; --accent: #FF7A1A; --good: #4CB86A; }
+    html { background: var(--bg); }
+    body {
+      margin: 0; padding: 32px 16px 64px; font-family: "Space Grotesk", system-ui, sans-serif; color: var(--ink);
+      background: radial-gradient(ellipse at top, #241a38, var(--bg) 70%) fixed;
+    }
+    main { max-width: 680px; margin: 0 auto; background: var(--panel); border: 3px solid var(--ink); border-radius: 22px; box-shadow: 0 6px 0 var(--ink); padding: 28px 24px 32px; }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+    header img { width: 64px; height: 64px; border-radius: 16px; border: 3px solid var(--ink); }
+    h1 { font-size: 34px; line-height: 1.1; letter-spacing: -0.03em; margin: 0; }
+    .sub { color: var(--muted); margin: 4px 0 0; font-size: 15px; }
+    h2 { font-size: 20px; margin: 28px 0 8px; }
+    p, li { font-size: 16px; line-height: 1.6; }
+    ul { padding-left: 20px; }
+    .tldr { background: #E7F7EA; border: 2px solid var(--ink); border-radius: 14px; padding: 12px 16px; margin-top: 20px; }
+    .tldr b { color: #2E7D46; }
+    a { color: #C8501A; }
+    footer { color: var(--muted); font-size: 14px; margin-top: 28px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="assets/app-192.png" alt="">
+    <div><h1>Privatlivspolitik</h1><p class="sub">Rumkolonien · gældende fra 19. oktober 2026</p></div>
+  </header>
+
+  <div class="tldr"><b>Kort sagt:</b> Rumkolonien har ingen konti, ingen reklamer og ingen sporing. Spillet gemmer kun din koloni og det navn, du selv vælger, så du kan spille videre på flere enheder og være med på ranglisterne.</div>
+
+  <h2>Hvad gemmes, og hvor</h2>
+  <ul>
+    <li><b>På din enhed:</b> Hele din koloni gemmes lokalt i appen eller browseren. Du kan slette den under ? → Start en ny koloni.</li>
+    <li><b>I skyen (Supabase, datacenter i Stockholm i EU):</b> en kopi af din koloni, dit niveau, dit spillernavn og dine scorer på ranglisterne. Annoncer i Rumposten, hjælp til naboer og bidrag til terraformingen gemmes også, så andre spillere kan se dem.</li>
+    <li><b>Din kolonikode:</b> Kolonien er knyttet til en tilfældig, hemmelig kode, som kun ligger på dine enheder. Databasen gemmer kun en hash af koden og aldrig koden selv.</li>
+  </ul>
+
+  <h2>Hvad gemmes ikke</h2>
+  <ul>
+    <li>Ingen e-mail, intet telefonnummer, ingen adresse og ingen konto.</li>
+    <li>Ingen placering, kontakter, fotos eller andre data fra din telefon.</li>
+    <li>Ingen reklamer, ingen analyseværktøjer og ingen sporing på tværs af apps eller hjemmesider.</li>
+  </ul>
+
+  <h2>Hvad andre spillere kan se</h2>
+  <p>Dit spillernavn og dit niveau står på ranglisterne. Naboer kan besøge din koloni og se kortet, men aldrig dit lager, dine kreditter eller din kolonikode. Vælg et navn, du har det godt med at vise. Du kan ændre det når som helst under ?.</p>
+
+  <h2>Notifikationer</h2>
+  <p>Hvis du slår beskeder til, planlægges de lokalt på din telefon. De sendes ikke gennem en server, og du kan slå dem fra i spillet eller i telefonens indstillinger.</p>
+
+  <h2>Børn</h2>
+  <p>Spillet indsamler ikke personoplysninger. Det eneste, man selv skriver, er spillernavnet, så det er en god idé, at børn ikke bruger deres rigtige navn.</p>
+
+  <h2>Slet dine data</h2>
+  <p>Start en ny koloni i spillet, så erstattes den gamle. Vil du have kolonien slettet helt fra skyen, kan du skrive via linket nedenfor med koloniens navn. Del aldrig din kolonikode eller dit link offentligt, for de giver adgang til kolonien.</p>
+
+  <h2>Kontakt</h2>
+  <p>Spørgsmål om privatliv kan stilles på <a href="https://github.com/rasmusschmiegelow-oss/rumkolonien/issues">GitHub</a>.</p>
+
+  <h2>In English</h2>
+  <p>Rumkolonien has no accounts, ads, analytics or tracking. Your colony is saved on your device and, so you can continue on other devices, in a database in the EU (Supabase, Stockholm). The database stores your colony, level, chosen player name and leaderboard scores, linked to a hash of a random secret code that only exists on your devices. Notifications are scheduled locally on your device. To have your data deleted, contact us via the GitHub link above with your colony name. Never share your colony code or link publicly.</p>
+
+  <footer>Rumkolonien er et hobbyspil. Lydeffekter fra Kenney.nl (CC0).</footer>
+</main>
+</body>
+</html>
