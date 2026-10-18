@@ -1,5 +1,5 @@
 // Service worker: gør spillet installérbart og spilbart uden net.
-const CACHE = 'rumkolonien-v8';
+const CACHE = 'rumkolonien-v9';
 const FILES = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/data.js', 'js/audio.js', 'js/music.js', 'js/arcade.js', 'js/notify.js', 'js/cloud.js', 'js/sprites.js', 'js/state.js', 'js/map.js', 'js/ui.js', 'js/main.js',
@@ -12,6 +12,7 @@ const FILES = [
   "assets/icons/batteri.svg",
   "assets/icons/batterifabrik.svg",
   "assets/icons/bioreaktor.svg",
+  "assets/icons/boelle.svg",
   "assets/icons/boers.svg",
   "assets/icons/bomuld.svg",
   "assets/icons/box.svg",
@@ -58,6 +59,7 @@ const FILES = [
   "assets/icons/joystick.svg",
   "assets/icons/kaffe.svg",
   "assets/icons/kaffebar.svg",
+  "assets/icons/kamera.svg",
   "assets/icons/kartoffel.svg",
   "assets/icons/klokke.svg",
   "assets/icons/krydderilab.svg",
@@ -85,6 +87,7 @@ const FILES = [
   "assets/icons/pad.svg",
   "assets/icons/pakker.svg",
   "assets/icons/pandekage.svg",
+  "assets/icons/phobos.svg",
   "assets/icons/pizza.svg",
   "assets/icons/plot.svg",
   "assets/icons/pokal.svg",
@@ -93,6 +96,8 @@ const FILES = [
   "assets/icons/rover.svg",
   "assets/icons/ruin.svg",
   "assets/icons/rumdragt.svg",
+  "assets/icons/rumposten.svg",
+  "assets/icons/saml.svg",
   "assets/icons/skjold.svg",
   "assets/icons/sommer.svg",
   "assets/icons/sound.svg",

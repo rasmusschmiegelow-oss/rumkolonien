@@ -110,12 +110,15 @@ function diamond(x, y, w, h) {
 }
 
 const GROUND = ['#C8623A', '#BF5A34', '#CC6A40', '#C35E37'];
+const GROUND_PHOBOS = ['#8E8A86', '#86817C', '#959089', '#8A857F']; // Phobos er grå
 
 function drawGround(idx) {
   const [x, y] = tileCenter(idx);
   const t = S.tiles[idx];
   diamond(x, y, TW + 1, TH + 1);
-  ctx.fillStyle = t.t === 'locked' ? '#9E4A2C' : GROUND[Math.floor(hash(idx) * GROUND.length)];
+  const phobos = S.prestige > 0;
+  const pal = phobos ? GROUND_PHOBOS : GROUND;
+  ctx.fillStyle = t.t === 'locked' ? (phobos ? '#6E6A66' : '#9E4A2C') : pal[Math.floor(hash(idx) * pal.length)];
   ctx.fill();
   if (t.t !== 'locked') {
     ctx.strokeStyle = '#2A1A1418'; ctx.lineWidth = 1; ctx.stroke();
@@ -131,11 +134,11 @@ function drawGround(idx) {
   const r = Math.floor(idx / COLS), c = idx % COLS;
   ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 2;
   if (r === ROWS - 1) {
-    ctx.fillStyle = '#7A3820';
+    ctx.fillStyle = S.prestige > 0 ? '#5A5652' : '#7A3820';
     ctx.beginPath(); ctx.moveTo(x - TW / 2, y); ctx.lineTo(x, y + TH / 2); ctx.lineTo(x, y + TH / 2 + 22); ctx.lineTo(x - TW / 2, y + 22); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
   if (c === COLS - 1) {
-    ctx.fillStyle = '#5E2A18';
+    ctx.fillStyle = S.prestige > 0 ? '#45423F' : '#5E2A18';
     ctx.beginPath(); ctx.moveTo(x, y + TH / 2); ctx.lineTo(x + TW / 2, y); ctx.lineTo(x + TW / 2, y + 22); ctx.lineTo(x, y + TH / 2 + 22); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
 }
@@ -468,6 +471,7 @@ function drawScene(now) {
   const order = [];
   for (let i = 0; i < S.tiles.length; i++) order.push({ d: Math.floor(i / COLS) + (i % COLS), fn: () => drawTile(i, now, t) });
   if (!visiting) for (const a of Object.values(agents)) if (a) order.push({ d: a.depth + 0.5, fn: () => drawAgent(a, now) });
+  if (!visiting && pet.ready && S.level >= PET_LEVEL) order.push({ d: pet.y / (TH / 2) + 2, fn: () => drawPet(now) });
   order.sort((a, b) => a.d - b.d);
   for (const o of order) o.fn();
 
@@ -556,6 +560,47 @@ function homeOf() {
   return tileCenter(pad >= 0 ? pad : 0);
 }
 
+// Bølle flyver rundt mellem felterne, der er ryddet.
+const pet = { x: 0, y: 0, tx: 0, ty: 0, wait: 0, ready: false };
+function updatePet(dt) {
+  if (visiting || S.level < PET_LEVEL) return;
+  if (!pet.ready) { const [x, y] = homeOf(); Object.assign(pet, { x: x + 60, y: y - 10, tx: x, ty: y, ready: true }); }
+  if (S.pet.found) return; // venter stille med sin skat, så den er nem at trykke på
+  pet.wait -= dt;
+  const dx = pet.tx - pet.x, dy = pet.ty - pet.y, d = Math.hypot(dx, dy);
+  if (d < 3 && pet.wait <= 0) {
+    const open = S.tiles.map((t, i) => i).filter((i) => S.tiles[i].t !== 'locked');
+    const [tx, ty] = tileCenter(open[Math.floor(Math.random() * open.length)]);
+    pet.tx = tx + rand(-20, 20); pet.ty = ty + rand(-8, 8);
+    pet.wait = rand(1.5, 4);
+  } else if (d >= 3) {
+    const sp = 70;
+    pet.x += (dx / d) * Math.min(d, sp * dt); pet.y += (dy / d) * Math.min(d, sp * dt);
+  }
+}
+function drawPet(now) {
+  const hover = 58 + (S.pet.found ? Math.abs(Math.sin(now / 180)) * 10 : Math.sin(now / 260) * 5);
+  ctx.fillStyle = '#00000026';
+  ctx.beginPath(); ctx.ellipse(pet.x, pet.y + 2, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const tilt = Math.max(-0.3, Math.min(0.3, (pet.tx - pet.x) / 200));
+  ctx.save(); ctx.translate(pet.x, pet.y - hover); ctx.rotate(tilt);
+  drawSprite(ctx, 'boelle', 0, 0, 34);
+  ctx.restore();
+  if (S.pet.found) {
+    const by = pet.y - hover - 34 + Math.sin(now / 200) * 3;
+    ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#2A1A14'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(pet.x, by, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    drawSprite(ctx, S.pet.found.item, pet.x, by, 22);
+    if (Math.random() < 0.15) particles.push({ x: pet.x + rand(-14, 14), y: by + rand(-10, 10), vx: 0, vy: -15, life: 0.6, color: '#F5C243', s: 2.5 });
+  }
+}
+// Rammer et tryk Bølle? (skærmkoordinater)
+function petHit(sx, sy) {
+  if (visiting || S.level < PET_LEVEL || !pet.ready) return false;
+  const [px, py] = toScreen(pet.x, pet.y - 58);
+  return Math.hypot(px - sx, py - sy) < 44 * Math.max(cam.z, 0.7);
+}
+
 function resetAgents() {
   for (const a of Object.values(agents)) if (a) { a.target = -1; a.wait = 0.5; }
 }
@@ -586,6 +631,7 @@ function findWork(a) {
 
 function updateAgents(dt) {
   if (visiting) return;
+  updatePet(dt);
   ensureAgents();
   for (const a of Object.values(agents)) {
     if (!a) continue;
@@ -689,7 +735,10 @@ canvas.addEventListener('pointermove', (e) => {
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
-  if (drag.mode === 'pending' && drag.start >= 0) onTile(drag.start);
+  if (drag.mode === 'pending') {
+    if (petHit(drag.sx, drag.sy)) onPet();
+    else if (drag.start >= 0) onTile(drag.start);
+  }
   if (pointers.size === 0) drag = null;
   else if (drag.mode === 'pinch') drag = { mode: 'done' };
 }
@@ -701,3 +750,45 @@ canvas.addEventListener('wheel', (e) => {
   const [x, y] = localPos(e);
   zoomAt(x, y, cam.z * Math.exp(-e.deltaY * 0.0015));
 }, { passive: false });
+
+// ---------- Fotomodus ----------
+// Tegner hele kolonien i høj opløsning og sætter en ramme med navn, niveau og årstid omkring.
+function renderPhoto() {
+  const W = 1200, H = 900;
+  const saved = { cam: { ...cam }, viewW, viewH, dpr };
+  viewW = W; viewH = H; dpr = 1;
+  canvas.width = W; canvas.height = H;
+  const cleared = S.tiles.map((t, i) => i).filter((i) => S.tiles[i].t !== 'locked');
+  let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+  for (const i of cleared) { const [x, y] = tileCenter(i); minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y); }
+  cam.x = (minx + maxx) / 2; cam.y = (miny + maxy) / 2 - 30;
+  cam.z = Math.min(1.6, Math.max(0.6, Math.min(W / (maxx - minx + TW * 3), H / (maxy - miny + TH * 6))));
+  const prevHint = hint; hint = null;
+  const ed = editMode; editMode = false;
+  floaters.length = 0;
+  draw(performance.now());
+  hint = prevHint; editMode = ed;
+
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H + 190;
+  const g = out.getContext('2d');
+  g.fillStyle = '#120D1C'; g.fillRect(0, 0, out.width, out.height);
+  g.drawImage(canvas, 0, 110);
+  g.fillStyle = '#FBF6F1'; g.fillRect(0, 0, W, 110); g.fillRect(0, H + 110, W, 80);
+  g.fillStyle = '#2A1A14'; g.fillRect(0, 108, W, 4); g.fillRect(0, H + 108, W, 4);
+  drawSprite(g, S.prestige > 0 ? 'phobos' : 'rocket', 62, 55, 70);
+  g.fillStyle = '#2A1A14';
+  g.font = '700 46px "Space Grotesk", sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillText(S.playerName || 'Min koloni', 112, 44);
+  g.font = '500 24px "Space Grotesk", sans-serif'; g.fillStyle = '#7A5A4A';
+  const where = S.prestige > 0 ? `Phobos · ${S.prestige} ★` : 'Mars';
+  g.fillText(`Niveau ${S.level} · ${where} · ${season().name} · lykke ${happiness()}`, 114, 84);
+  g.textAlign = 'right'; g.fillStyle = '#FF7A1A'; g.font = '700 30px "Space Grotesk", sans-serif';
+  g.fillText('Rumkolonien', W - 36, 55);
+  g.textAlign = 'center'; g.fillStyle = '#2A1A14'; g.font = '500 24px "Space Grotesk", sans-serif';
+  g.fillText('Byg din egen koloni på rasmusschmiegelow-oss.github.io/rumkolonien', W / 2, H + 152);
+
+  Object.assign(cam, saved.cam);
+  resize();
+  return out;
+}

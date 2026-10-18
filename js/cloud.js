@@ -137,6 +137,7 @@ const Cloud = (() => {
     await push(true);
     claimGifts();
     checkWeekPrize();
+    collectSales(true);
     setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY) { lastPush = Date.now(); push(); checkWeekPrize(); } }, 5000);
     document.addEventListener('visibilitychange', () => { if (document.hidden) push(false, true); });
     // Et link indsat i samme fane ændrer kun #-delen, så siden genindlæses ikke.
@@ -145,6 +146,18 @@ const Cloud = (() => {
 
   async function leaderboard(board) {
     return rpc('get_leaderboard', { p_board: board, p_key: key });
+  }
+
+  // Penge for varer, andre har købt i Rumposten.
+  async function collectSales(quiet) {
+    try {
+      const r = await rpc('market_collect', { p_key: key });
+      if (!r || !r.count) return 0;
+      earn(r.credits); save();
+      Sound.play('coin');
+      toast(`${icon('rumposten')} Du har solgt ${r.count} ${r.count === 1 ? 'annonce' : 'annoncer'} i Rumposten: +${r.credits} ${icon('coin')}`, 'good', 5000);
+      return r.credits;
+    } catch (e) { if (!quiet) toast('Rumposten kan ikke nås lige nu.', 'bad'); return 0; }
   }
 
   // Hjælp fra naboer, mens man var væk.
@@ -182,6 +195,15 @@ const Cloud = (() => {
   return {
     start, push, leaderboard, adopt,
     neighbors: () => rpc('list_neighbors', { p_key: key }),
+    market: {
+      list: (item, qty, price) => rpc('market_list', { p_key: key, p_item: item, p_qty: qty, p_price: price }),
+      browse: () => rpc('market_browse', { p_key: key }),
+      buy: (id) => rpc('market_buy', { p_key: key, p_id: id }),
+      mine: () => rpc('market_mine', { p_key: key }),
+      collect: () => rpc('market_collect', { p_key: key }),
+      cancel: (id) => rpc('market_cancel', { p_key: key, p_id: id }),
+    },
+    collectSales,
     visit: (id) => rpc('visit_colony', { p_id: id }),
     help: (id) => rpc('help_colony', { p_key: key, p_id: id }),
     get key() { return key; },

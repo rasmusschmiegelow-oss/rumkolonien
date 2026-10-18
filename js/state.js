@@ -22,7 +22,7 @@ function newState() {
 
 // Udfylder felter, der mangler i gamle eller nye gemte spil.
 function defaults(st) {
-  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0, helped: 0 }, st.stats);
+  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0, helped: 0, postSold: 0, petFinds: 0 }, st.stats);
   return Object.assign({
     v: 2, credits: 50, xp: 0, level: 1, cleared: 0, silo: 1, inv: {}, orders: [], lastCrop: null,
     stats: { harvest: 0, produce: 0, deliver: 0, earn: 0 },
@@ -35,6 +35,7 @@ function defaults(st) {
     tickets: 0, decorInv: {}, arcade: { day: '', plays: 0, best: 0 },
     playerName: '', savedAt: 0,
     specials: null, mission: 0, weekScore: { id: '', n: 0 }, weekPrize: {},
+    prestige: 0, pet: { next: 0, found: null },
   }, st, { stats });
 }
 
@@ -714,9 +715,9 @@ function importSave(code) {
 
 // ---------- Version 4: hjælpere ----------
 const hasTech = (id) => !!(S.research && S.research.done[id]);
-const growthMult = () => 1 - (hasTech('vaekst1') ? 0.15 : 0) - (hasTech('vaekst2') ? 0.15 : 0);
+const growthMult = () => (1 - (hasTech('vaekst1') ? 0.15 : 0) - (hasTech('vaekst2') ? 0.15 : 0)) * prestigeGrowth(S.prestige || 0);
 const happiness = () => Math.min(HAPPY_MAX, S.tiles.reduce((a, t) => a + (t.t === 'deco' ? DECOR[t.id].happy : 0), 0));
-const payMult = () => 1 + (hasTech('handel') ? 0.15 : 0) + happiness() / 100;
+const payMult = () => 1 + (hasTech('handel') ? 0.15 : 0) + happiness() / 100 + prestigePay(S.prestige || 0);
 const orderPay = (credits) => Math.round(credits * payMult());
 
 // ---------- Pynt ----------
@@ -933,6 +934,7 @@ function adviceList() {
   const find = (fn) => S.tiles.findIndex(fn);
   const mp = missionProgress();
   if (S.tut >= TUTORIAL.length && mp && mp.done) out.push({ icon: 'mission', text: 'En mission er klaret. Hent belønningen.', act: 'missions' });
+  if (S.pet && S.pet.found) out.push({ icon: 'boelle', text: 'Bølle har fundet noget. Tryk på den lille drone.', act: 'pet' });
   const readyPlots = S.tiles.filter((t) => t.t === 'plot' && t.crop && now >= t.end).length;
   if (readyPlots) out.push({ icon: 'sprout', text: `Høst ${readyPlots} ${readyPlots === 1 ? 'moden kuppel' : 'modne kupler'}. Træk fingeren hen over dem.`, idx: find((t) => t.t === 'plot' && t.crop && now >= t.end) });
   const doneB = find((t) => t.t === 'b' && t.queue && t.queue.some((q) => q.end <= now));
@@ -1044,6 +1046,100 @@ function claimMission() {
   const next = currentMission();
   const chapterDone = !next || next.ch !== m.ch;
   toast(`${icon('mission')} Mission klaret: +${m.reward} ${icon('coin')}${m.krystal ? ` og ${m.krystal} ${icon('krystal')}` : ''}${chapterDone && next ? ` · Nyt kapitel: ${MISSION_CHAPTERS[next.ch].title}` : ''}`, 'good', 4500);
+  save();
+  return true;
+}
+
+// ---------- Version 7: saml alt ----------
+// Høster, samler, fodrer og planter det samme igen i ét tryk.
+function collectAll() {
+  const now = Date.now();
+  const r = { harvest: 0, collect: 0, fed: 0, planted: 0, full: false };
+  S.tiles.forEach((t, i) => {
+    if (t.t === 'plot' && t.crop && now >= t.end) {
+      const crop = t.crop;
+      if (harvest(i, true)) {
+        r.harvest++;
+        if (S.credits >= CROPS[crop].cost && plant(i, crop, true)) r.planted++;
+      } else r.full = true;
+    }
+  });
+  S.tiles.forEach((t, i) => {
+    if (t.t === 'b' && t.queue && t.queue.some((q) => q.end <= now)) {
+      const n = collect(i, true);
+      r.collect += n;
+      if (!n) r.full = true;
+    }
+    if (t.t === 'pen') { r.collect += collectPen(i, true); r.fed += feedPen(i); }
+  });
+  // tomme kupler får den sidst plantede afgrøde
+  if (S.lastCrop) {
+    S.tiles.forEach((t, i) => {
+      if (t.t === 'plot' && !t.crop && S.credits >= CROPS[S.lastCrop].cost && plant(i, S.lastCrop, true)) r.planted++;
+    });
+  }
+  save();
+  return r;
+}
+
+// ---------- Version 7: Phobos ----------
+function startPhobos() {
+  if (S.level < PRESTIGE_LEVEL) return false;
+  const n = (S.prestige || 0) + 1;
+  const keep = {
+    medals: S.medals, playerName: S.playerName, stats: S.stats, mission: S.mission, story: S.story,
+    tickets: S.tickets, decorInv: S.decorInv, arcade: S.arcade, weekScore: S.weekScore, weekPrize: S.weekPrize,
+    daily: S.daily, weekly: S.weekly, mayor: S.mayor,
+  };
+  newState();
+  Object.assign(S, keep, { prestige: n, credits: 50 + 500 * n, tut: TUTORIAL.length });
+  save();
+  return true;
+}
+
+// ---------- Version 7: Bølle ----------
+function petFind() {
+  const r = Math.random();
+  const fest = isFestival();
+  if (r < 0.05) return { item: 'krystal', n: 1 };
+  if (r < 0.06) return { item: 'artefakt', n: 1 };
+  if (r < 0.14 && fest) return { item: 'festbillet', n: 2 };
+  if (r < 0.40) return { item: 'jern', n: 1 + Math.floor(Math.random() * 3) };
+  if (r < 0.55) return { item: 'vand', n: 3 + Math.floor(Math.random() * 3) };
+  if (r < 0.70) {
+    const crops = Object.keys(CROPS).filter((k) => CROPS[k].level <= S.level);
+    return { item: crops[Math.floor(Math.random() * crops.length)], n: 2 + Math.floor(Math.random() * 3) };
+  }
+  return { item: 'coin', n: 20 + S.level * 10 };
+}
+
+function petTick(now) {
+  if (S.level < PET_LEVEL || S.pet.found) return;
+  if (!S.pet.next) { S.pet.next = now + 3 * 60 * 1000; return; }
+  if (now >= S.pet.next) {
+    S.pet.found = petFind();
+    Sound.play('pickup');
+    save();
+  }
+}
+
+function collectPet() {
+  const f = S.pet.found;
+  if (!f) return false;
+  if (f.item === 'coin') earn(f.n);
+  else if (f.item === 'festbillet') S.tickets += f.n;
+  else {
+    if (!spaceFor(f.n)) return fail('Lageret er fuldt. Bølle venter med sin skat.');
+    addItem(f.item, f.n);
+    if (f.item === 'artefakt') S.stats.artefakter += f.n;
+  }
+  S.pet.found = null;
+  S.pet.next = Date.now() + rand(6, 12) * 60 * 1000;
+  S.stats.petFinds++;
+  Sound.play('coin');
+  Sound.buzz(15);
+  const name = f.item === 'coin' ? 'kreditter' : f.item === 'festbillet' ? 'festbilletter' : ITEMS[f.item].name.toLowerCase();
+  toast(`${icon('boelle')} Bølle fandt ${f.n} ${name}! ${icon(f.item)}`, 'good');
   save();
   return true;
 }

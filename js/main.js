@@ -15,6 +15,7 @@ function loop(now) {
     tutorialTick();
     medalTick();
     shipTick(t);
+    petTick(t);
     if (lastSeason !== seasonIndex(t)) {
       if (lastSeason !== -1) { const se = season(t); toast(`${icon(se.id)} Nu er det <b>${se.name.toLowerCase()}</b> på Mars. ${se.desc}`, 'good', 6000); }
       lastSeason = seasonIndex(t);

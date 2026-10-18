@@ -330,8 +330,10 @@ function priceTag(p) {
 
 function openInventory(tab = 'lager') {
   const tabs = `<div class="tabs"><button class="${tab === 'lager' ? 'on' : ''}" data-act="invtab" data-arg="lager">${icon('box', 'ic-s')} Lager</button>
-    <button class="${tab === 'boers' ? 'on' : ''}" data-act="invtab" data-arg="boers">${icon('boers', 'ic-s')} Rumbørsen</button></div>`;
+    <button class="${tab === 'boers' ? 'on' : ''}" data-act="invtab" data-arg="boers">${icon('boers', 'ic-s')} Rumbørsen</button>
+    <button class="${tab.startsWith('post') ? 'on' : ''}" data-act="invtab" data-arg="post">${icon('rumposten', 'ic-s')} Rumposten</button></div>`;
   if (tab === 'boers') return openMarket(tabs);
+  if (tab.startsWith('post')) return openPost(tabs, tab);
   const ids = Object.keys(ITEMS).filter((id) => have(id) > 0);
   const used = invTotal(), c = cap(), cost = siloCost(S.silo);
   const rows = ids.map((id) => {
@@ -438,6 +440,7 @@ function openClear(idx) {
 
 function openColony(tab = 'goals') {
   const tabs = [['goals', 'Mål'], ['board', 'Rangliste'], ['medals', 'Medaljer'], ['robots', 'Robotter'], ['people', 'Kolonister']];
+  if (S.level >= PRESTIGE_LEVEL || S.prestige) tabs.push(['phobos', 'Phobos']);
   let body = '';
   if (tab === 'goals') {
     const streak = S.daily.streak || 0, day = ((Math.max(1, streak) - 1) % 7) + 1;
@@ -457,6 +460,17 @@ function openColony(tab = 'goals') {
       </div>`;
     });
     body += '</div>';
+  } else if (tab === 'phobos') {
+    const n = S.prestige || 0;
+    body += `<div class="colonist"><div class="portrait">${icon('phobos', 'ic-xl')}</div><div class="col-body">
+      <b>${n ? `${n} ${n === 1 ? 'stjerne' : 'stjerner'} fra Phobos` : 'Ny koloni på Phobos'}</b>
+      <p class="quote">Når kolonien på Mars er færdigbygget, kan du starte forfra på Mars' måne Phobos. Du tager erfaringen med dig.</p></div></div>
+      <div class="section-title">Hver ny koloni giver</div>
+      <div class="list"><div class="row"><div class="ico">${icon('coin')}</div><div class="info"><b>+10 % på alle ordrer</b><small>Nu: +${Math.round(prestigePay(n) * 100)} %</small></div></div>
+      <div class="row"><div class="ico">${icon('sprout')}</div><div class="info"><b>Afgrøder gror 5 % hurtigere</b><small>Nu: ${Math.round((1 - prestigeGrowth(n)) * 100)} % hurtigere (højst 25 %)</small></div></div>
+      <div class="row"><div class="ico">${icon('coin')}</div><div class="info"><b>${500 * (n + 1)} kreditter at starte med</b><small>og en grå månekoloni med nye klipper og hemmeligheder</small></div></div></div>
+      <p class="muted small">Du beholder medaljer, missioner, statistik, festbilletter, festivalpynt og dit navn. Kortet, lageret, bygninger, forskning og robotter starter forfra.</p>
+      <button class="primary wide" data-act="phobos" ${S.level >= PRESTIGE_LEVEL ? '' : 'disabled'}>${S.level >= PRESTIGE_LEVEL ? 'Rejs til Phobos' : `Kræver niveau ${PRESTIGE_LEVEL}`}</button>`;
   } else if (tab === 'board') {
     body += `<div class="tabs sub">${[['week', 'Ugens leverancer'], ['level', 'Niveau'], ['arcade', 'Asteroidejagt'], ['medals', 'Medaljer']]
       .map(([k, l]) => `<button class="${k === openColony.board ? 'on' : ''}" data-act="board" data-arg="${k}">${l}</button>`).join('')}</div>
@@ -517,6 +531,148 @@ async function loadBoard(board) {
   } catch (e) {
     $('boardList').innerHTML = '<p class="muted">Ranglisten kan ikke hentes lige nu. Tjek din forbindelse.</p>';
   }
+}
+
+// ---------- Rumposten ----------
+function postItemName(it, n) { return `${n} × ${ITEMS[it] ? ITEMS[it].name : it}`; }
+
+async function openPost(tabs, tab) {
+  const sub = tab === 'post' ? 'post-buy' : tab;
+  const subtabs = `<div class="tabs sub">${[['post-buy', 'Køb fra andre'], ['post-sell', 'Sæt til salg'], ['post-mine', 'Mine annoncer']]
+    .map(([k, l]) => `<button class="${k === sub ? 'on' : ''}" data-act="invtab" data-arg="${k}">${l}</button>`).join('')}</div>`;
+  if (sub === 'post-sell') {
+    const ids = Object.keys(ITEMS).filter((id) => have(id) > 0);
+    const first = ids[0];
+    showModal(`${icon('rumposten')} Rumposten`, `${tabs}${subtabs}
+      ${ids.length ? `<p class="muted small">Sæt varer til salg for andre spillere. Varerne forlader dit lager med det samme, og pengene venter på dig, når nogen køber. Annoncer gælder i 2 døgn, og du kan have 6 ad gangen.</p>
+      <div class="post-form">
+        <label>Vare <select id="postItem">${ids.map((id) => `<option value="${id}">${ITEMS[id].name} (${have(id)})</option>`).join('')}</select></label>
+        <label>Antal <input id="postQty" type="number" min="1" max="${Math.min(20, have(first))}" value="${Math.min(5, have(first))}"></label>
+        <label>Pris i alt <input id="postPrice" type="number" min="1"></label>
+        <p class="muted small" id="postHint"></p>
+        <button class="primary wide" data-act="postsell">Sæt til salg</button>
+      </div>` : '<p class="muted">Dit lager er tomt.</p>'}`);
+    if (ids.length) postFormUpdate(true);
+    return;
+  }
+  showModal(`${icon('rumposten')} Rumposten`, `${tabs}${subtabs}<div id="postList"><p class="muted">Henter annoncer …</p></div>`);
+  try {
+    if (sub === 'post-mine') {
+      const list = await Cloud.market.mine();
+      if (!$('postList')) return;
+      const sold = list.filter((l) => l.sold).reduce((a, l) => a + l.price, 0);
+      $('postList').innerHTML = (sold ? `<button class="primary wide" data-act="postcollect">Hent ${sold} ${icon('coin', 'ic-s')} for solgte varer</button>` : '')
+        + (list.length ? `<div class="list">${list.map((l) => `<div class="row ${l.sold ? 'hot' : ''}">
+          <div class="ico">${icon(l.item)}</div><div class="info"><b>${postItemName(l.item, l.qty)}</b><small>${l.price} kreditter · ${l.sold ? 'Solgt!' : l.expired ? 'Udløbet' : 'Til salg'}</small></div>
+          ${l.sold ? '' : `<button data-act="postcancel" data-arg="${l.id}">Tag tilbage</button>`}</div>`).join('')}</div>`
+          : '<p class="muted">Du har ingen annoncer.</p>');
+    } else {
+      const list = await Cloud.market.browse();
+      if (!$('postList')) return;
+      $('postList').innerHTML = list.length ? `<div class="list">${list.filter((l) => ITEMS[l.item]).map((l) => {
+        const val = ITEMS[l.item].value * l.qty, cheap = l.price < val;
+        return `<div class="row"><div class="ico">${icon(l.item)}</div>
+          <div class="info"><b>${postItemName(l.item, l.qty)}</b><small>fra ${escapeHtml(l.seller)}${cheap ? ' · <span class="up">godt tilbud</span>' : ''}</small></div>
+          <button class="primary" data-act="postbuy" data-arg="${l.id}" data-price="${l.price}" data-qty="${l.qty}" ${S.credits < l.price || !spaceFor(l.qty) ? 'disabled' : ''}>${l.price} ${icon('coin', 'ic-s')}</button></div>`;
+      }).join('')}</div>` : '<p class="muted">Ingen varer til salg lige nu. Sæt selv noget til salg!</p>';
+    }
+  } catch (e) {
+    if ($('postList')) $('postList').innerHTML = '<p class="muted">Rumposten kan ikke nås lige nu. Tjek din forbindelse.</p>';
+  }
+}
+
+function postFormUpdate(resetPrice) {
+  const it = $('postItem').value, qtyEl = $('postQty');
+  qtyEl.max = Math.min(20, have(it));
+  let q = Math.max(1, Math.min(Number(qtyEl.value) || 1, Number(qtyEl.max)));
+  qtyEl.value = q;
+  const val = ITEMS[it].value * q;
+  const lo = Math.max(1, Math.round(val * POST_MIN)), hi = Math.round(val * POST_MAX);
+  if (resetPrice) $('postPrice').value = Math.round(val * 1.1);
+  $('postHint').textContent = `Markedsværdi ${val} kreditter. Prisen skal ligge mellem ${lo} og ${hi}.`;
+}
+
+async function postSell() {
+  const it = $('postItem').value, q = Number($('postQty').value), price = Math.round(Number($('postPrice').value));
+  const val = ITEMS[it].value * q;
+  if (!q || q > have(it) || q > 20) return fail('Ugyldigt antal.');
+  if (!price || price < Math.max(1, Math.round(val * POST_MIN)) || price > Math.round(val * POST_MAX)) return fail('Prisen ligger uden for det tilladte.');
+  try {
+    const r = await Cloud.market.list(it, q, price);
+    if (!r || !r.ok) return fail(r && r.reason === 'full' ? 'Du har allerede 6 annoncer. Vent, til nogen bliver solgt.' : 'Annoncen kunne ikke oprettes.');
+    addItem(it, -q);
+    save();
+    Sound.play('coin');
+    toast(`${icon('rumposten')} ${postItemName(it, q)} er sat til salg for ${price} ${icon('coin')}.`, 'good');
+    openInventory('post-mine');
+  } catch (e) { fail('Rumposten kan ikke nås lige nu.'); }
+}
+
+async function postBuy(id, price, qty) {
+  if (S.credits < price) return fail('Ikke nok kreditter.');
+  if (!spaceFor(qty)) return fail('Lageret er fuldt.');
+  try {
+    const r = await Cloud.market.buy(id);
+    if (!r || !r.ok) { toast('Annoncen er allerede solgt.'); return openInventory('post-buy'); }
+    S.credits -= r.price;
+    addItem(r.item, r.qty);
+    save();
+    Sound.play('coin');
+    toast(`${icon(r.item)} Du købte ${postItemName(r.item, r.qty)} for ${r.price} ${icon('coin')}.`, 'good');
+    openInventory('post-buy');
+  } catch (e) { fail('Rumposten kan ikke nås lige nu.'); }
+}
+
+async function postCancel(id) {
+  try {
+    const r = await Cloud.market.cancel(id);
+    if (r && r.ok) {
+      addItem(r.item, r.qty); save();
+      toast(`${postItemName(r.item, r.qty)} er tilbage på lageret.`);
+    }
+    openInventory('post-mine');
+  } catch (e) { fail('Rumposten kan ikke nås lige nu.'); }
+}
+
+// ---------- Saml alt, foto, Phobos og Bølle ----------
+function doCollectAll() {
+  const r = collectAll();
+  const parts = [];
+  if (r.harvest) parts.push(`høstede ${r.harvest}`);
+  if (r.collect) parts.push(`samlede ${r.collect} varer`);
+  if (r.fed) parts.push(`fodrede ${r.fed} dyr`);
+  if (r.planted) parts.push(`plantede ${r.planted}`);
+  if (!parts.length) return toast(r.full ? 'Lageret er fuldt. Sælg noget, eller udvid lageret.' : 'Der er ikke noget at samle lige nu.', r.full ? 'bad' : '');
+  Sound.play('plop'); Sound.play('pickup'); Sound.buzz(20);
+  toast(`${icon('saml')} Du ${parts.join(', ')}.${r.full ? ' Lageret blev fuldt.' : ''}`, 'good', 4000);
+}
+
+let photoUrl = null;
+function openPhoto() {
+  const shot = renderPhoto();
+  shot.toBlob((blob) => {
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = URL.createObjectURL(blob);
+    openPhoto.blob = blob;
+    showModal(`${icon('kamera')} Fotomodus`, `
+      <img class="photo" src="${photoUrl}" alt="Billede af kolonien">
+      <div class="btnrow">${navigator.canShare && navigator.canShare({ files: [new File([blob], 'rumkolonien.png', { type: 'image/png' })] })
+        ? '<button class="primary" data-act="photoshare">Del billedet</button>' : ''}
+        <a class="btnlink" href="${photoUrl}" download="rumkolonien.png">Gem billedet</a></div>`);
+    Sound.play('click');
+  }, 'image/png');
+}
+
+function sharePhoto() {
+  const file = new File([openPhoto.blob], 'rumkolonien.png', { type: 'image/png' });
+  navigator.share({ files: [file], title: 'Min koloni på Mars', text: `Se min koloni i Rumkolonien! Niveau ${S.level}.`, url: location.origin + location.pathname })
+    .catch(() => { /* deling annulleret */ });
+}
+
+function onPet() {
+  if (S.pet.found) return collectPet();
+  Sound.play('click');
+  toast(`${icon('boelle')} Bølle leder efter skatte. Kom tilbage om ${fmtTime((S.pet.next - Date.now()) / 1000)}.`);
 }
 
 // ---------- Naboer ----------
@@ -743,6 +899,7 @@ document.addEventListener('click', (e) => {
       if (a.act === 'arcade') return openArcade();
       if (a.act === 'missions') return openMissions();
       if (a.act === 'neighbors') return openNeighbors();
+      if (a.act === 'pet') { closeModal(); camGoal = { x: pet.x, y: pet.y - 60 }; return; }
       closeModal();
       focusTile(a.idx);
       return;
@@ -779,13 +936,29 @@ document.addEventListener('click', (e) => {
       const se = season();
       return toast(`${icon(se.id)} <b>${se.name}</b>: ${se.desc} Skifter om ${fmtTime((seasonEnds() - Date.now()) / 1000)}.`, '', 5000);
     }
+    case 'collectall': return doCollectAll();
+    case 'photo': return openPhoto();
+    case 'photoshare': return sharePhoto();
+    case 'phobos':
+      if (confirm('Vil du forlade Mars og starte en ny koloni på Phobos? Kortet, lageret og bygningerne starter forfra.')) {
+        if (startPhobos()) { closeModal(); resetAgents(); centerCamera(); Sound.play('whoosh'); Sound.play('level'); toast(`${icon('phobos')} Velkommen til Phobos! Du har nu ${S.prestige} ${S.prestige === 1 ? 'stjerne' : 'stjerner'}.`, 'good', 5000); }
+      }
+      return;
+    case 'postsell': return postSell();
+    case 'postbuy': return postBuy(Number(arg), Number(btn.dataset.price), Number(btn.dataset.qty));
+    case 'postcancel': return postCancel(Number(arg));
+    case 'postcollect': Cloud.collectSales().then(() => openInventory('post-mine')); return;
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;
   }
 });
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'postQty') postFormUpdate(true);
+});
 document.addEventListener('change', (e) => {
+  if (e.target.id === 'postItem') { $('postQty').value = Math.min(5, have(e.target.value)); return postFormUpdate(true); }
   if (e.target.id !== 'playerName') return;
   const name = e.target.value.trim().slice(0, 20);
   if (name.length < 2) { e.target.value = S.playerName; return fail('Navnet skal være mindst 2 tegn.'); }
@@ -799,7 +972,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal
 // ---------- HUD ----------
 function updateHUD() {
   $('credits').textContent = S.credits.toLocaleString('da-DK');
-  $('level').textContent = S.level;
+  $('level').textContent = S.level + (S.prestige ? ` ★${S.prestige}` : '');
   const need = xpNeeded(S.level);
   $('xpfill').style.width = (S.xp / need) * 100 + '%';
   $('xptext').textContent = `${S.xp}/${need}`;

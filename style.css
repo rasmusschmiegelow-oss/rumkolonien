@@ -369,3 +369,23 @@ button.stat.clock { cursor: pointer; font: inherit; font-size: 13px; font-weight
 .perks { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: #2E7D46; }
 .row.special { background: #EAF6FF; }
 @media (max-width: 640px) { .clock { display: inline-flex; } .banner.top.mission span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; } }
+
+/* ---------- Version 7 ---------- */
+.fab .collect { background: #E7F7EA; }
+.post-form { display: grid; gap: 10px; background: #fff; border: 2.5px solid var(--line); border-radius: 14px; padding: 12px; }
+.post-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.post-form select, .post-form input {
+  font: inherit; font-size: 16px; color: var(--ink); padding: 8px 10px; border: 2.5px solid var(--line); border-radius: 12px; background: #fff;
+}
+.post-form p { margin: 0; }
+.photo { width: 100%; border-radius: 14px; border: 2.5px solid var(--line); display: block; margin-bottom: 10px; }
+.btnlink {
+  font-weight: 600; color: var(--ink); text-decoration: none; border: 2.5px solid var(--line); background: #fff; border-radius: 12px;
+  padding: 7px 12px; box-shadow: 0 3px 0 var(--line); display: inline-flex; align-items: center;
+}
+@media (max-width: 640px) {
+  .fab { gap: 6px; right: 8px; bottom: 8px; }
+  .fab button { width: 46px; height: 46px; border-radius: 14px; }
+  .fab button img { width: 30px; height: 30px; }
+  .fab .advisor { width: 46px; }
+}

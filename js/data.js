@@ -154,6 +154,9 @@ const MEDALS = [
   { id: 'arc',   name: 'Asteroidejæger',     desc: 'Få 40 point i asteroidejagt.',          test: () => S.arcade.best >= 40, reward: 200 },
   { id: 'nabo',  name: 'Nabohjælper',           desc: 'Hjælp 10 naboer.',                      test: () => S.stats.helped >= 10, reward: 300 },
   { id: 'miss',  name: 'Missionen fuldført', desc: 'Gennemfør alle missioner.',              test: () => S.mission >= MISSIONS.length, reward: 2000 },
+  { id: 'phobos', name: 'Månekolonist',     desc: 'Start en ny koloni på Phobos.',          test: () => S.prestige >= 1, reward: 1000 },
+  { id: 'post',  name: 'Postmester',         desc: 'Sælg en vare til en anden spiller.',    test: () => S.stats.postSold >= 1, reward: 150 },
+  { id: 'pet',   name: 'Bølles bedste ven',  desc: 'Lad Bølle finde 20 ting.',               test: () => S.stats.petFinds >= 20, reward: 300 },
   { id: 'fest',  name: 'Festabe',            desc: 'Sæt festivalpynt op.',                  test: () => S.tiles.some((t) => t.t === 'deco' && DECOR[t.id].fest), reward: 150 },
 ];
 
@@ -351,3 +354,13 @@ const MISSIONS = [
   { ch: 4, text: 'Nå 20 i lykke',                   p: () => [happiness(), 20],                             reward: 1000 },
   { ch: 4, text: 'Nå niveau 15',                    p: () => [S.level, 15],                                 reward: 3000, krystal: 5 },
 ];
+
+// ---------- Version 7 ----------
+// Rumposten: priser pr. annonce skal ligge mellem halv og tredobbelt markedsværdi.
+const POST_MIN = 0.5, POST_MAX = 3;
+// Phobos: hver ny koloni giver varige bonusser.
+const PRESTIGE_LEVEL = 15;
+const prestigePay = (n) => 0.1 * n;                    // +10 % for ordrer pr. stjerne
+const prestigeGrowth = (n) => Math.max(0.75, 1 - 0.05 * n); // afgrøder gror 5 % hurtigere pr. stjerne
+// Bølle finder noget nyt hvert 6.-12. minut.
+const PET_LEVEL = 2;
