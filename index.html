@@ -27,7 +27,7 @@
       </div>
       <div class="stat happy" id="happy" title="Koloniens lykke: bonus på alle ordrer" hidden><img class="ic" src="assets/icons/lykke.svg" alt=""><b id="happyNum">0 %</b></div>
       <button class="stat fest-chip" id="festChip" data-act="festival" title="Marsfestivalen" hidden><img class="ic" src="assets/icons/festbillet.svg" alt=""><b id="festNum">0</b></button>
-      <div class="stat clock" id="clock" title="Tid på Mars"></div>
+      <button class="stat clock" id="clock" data-act="season" title="Årstid og tid på Mars"></button>
     </div>
     <nav class="actions">
       <button data-act="orders" title="Ordrer"><img class="ic" src="assets/icons/rocket.svg" alt=""><span class="lbl">Ordrer</span><span id="orderBadge" class="badge" hidden>0</span></button>
@@ -42,11 +42,14 @@
   <main>
     <div class="map-wrap">
       <canvas id="map" aria-label="Kort over kolonien"></canvas>
-      <div id="tutorial" class="banner top" hidden></div>
+      <div id="tutorial" class="banner top" data-act="missions" hidden></div>
+      <div id="visitBanner" class="banner top visit" hidden><img class="ic" src="assets/icons/nabo.svg" alt=""> <span>Besøg hos <b id="visitName"></b></span>
+        <button class="primary" id="visitHelp" data-act="helpnb">Hjælp</button><button data-act="leavevisit">Tilbage</button></div>
       <div id="eventBanner" class="banner bottom" hidden></div>
       <div id="editBanner" class="banner top edit" hidden><img class="ic" src="assets/icons/flyt.svg" alt=""> Tryk på noget for at vælge det, og tryk derefter, hvor det skal stå. <button class="primary" data-act="editdone">Færdig</button></div>
       <div class="fab">
         <button data-act="arcade" id="arcadeBtn" title="Asteroidejagt" aria-label="Asteroidejagt" hidden><img src="assets/icons/joystick.svg" alt=""></button>
+        <button data-act="neighbors" title="Naboer" aria-label="Naboer"><img src="assets/icons/nabo.svg" alt=""></button>
         <button data-act="edit" title="Flyt ting rundt" aria-label="Flyt ting rundt"><img src="assets/icons/flyt.svg" alt=""></button>
         <button data-act="advisor" class="advisor" title="Hvad nu?"><img src="assets/icons/col-ida.svg" alt=""><span>Hvad nu?</span></button>
       </div>

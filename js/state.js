@@ -16,12 +16,13 @@ function newState() {
   for (let c = 2; c <= 7; c++) tiles[idxOf(4, c)] = { t: 'plot', crop: null, start: 0, end: 0 };
   S = defaults({ credits: 50, inv: { kartoffel: 4, vand: 2 }, tiles });
   fillOrders();
+  ensureSpecials();
   return S;
 }
 
 // Udfylder felter, der mangler i gamle eller nye gemte spil.
 function defaults(st) {
-  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0 }, st.stats);
+  const stats = Object.assign({ harvest: 0, produce: 0, deliver: 0, earn: 0, expeditions: 0, artefakter: 0, ships: 0, sold: 0, helped: 0 }, st.stats);
   return Object.assign({
     v: 2, credits: 50, xp: 0, level: 1, cleared: 0, silo: 1, inv: {}, orders: [], lastCrop: null,
     stats: { harvest: 0, produce: 0, deliver: 0, earn: 0 },
@@ -33,18 +34,19 @@ function defaults(st) {
     research: { done: {}, active: null }, ship: null, shipNext: 0,
     tickets: 0, decorInv: {}, arcade: { day: '', plays: 0, best: 0 },
     playerName: '', savedAt: 0,
+    specials: null, mission: 0, weekScore: { id: '', n: 0 }, weekPrize: {},
   }, st, { stats });
 }
 
 // Gemte spil fra version 1 havde et kort på 8x7. Det flyttes ind på det nye kort.
 function migrate(old) {
-  if (old.v === 2) return defaults(old);
+  if (old.v === 2) return ensureSpecials(defaults(old));
   const tiles = Array.from({ length: COLS * ROWS }, () => ({ t: 'locked' }));
   old.tiles.forEach((t, i) => {
     const r = Math.floor(i / 8), c = i % 8;
     if (r + 1 < ROWS && c + 1 < COLS) tiles[idxOf(r + 1, c + 1)] = t;
   });
-  return defaults({ ...old, v: 2, tiles, tut: old.level > 1 ? TUTORIAL.length : 0 });
+  return ensureSpecials(defaults({ ...old, v: 2, tiles, tut: old.level > 1 ? TUTORIAL.length : 0 }));
 }
 
 function load() {
@@ -134,7 +136,7 @@ function unlockedPool() {
     return owns(b);
   });
   const animal = Object.keys(ANIMALS).filter((k) => S.tiles.some((t) => t.t === 'pen' && t.id === k)).map((k) => ANIMALS[k].product);
-  return [...crops, ...goods, ...animal];
+  return [...crops, ...goods, ...animal].filter((id) => id !== 'krystal');
 }
 
 function genItems(maxTypes, crowd = 1) {
@@ -186,6 +188,7 @@ function deliver(i) {
   S.stats.deliver++;
   track('deliver', 1);
   giveTickets(1 + Math.min(2, Math.floor(o.credits / 150)));
+  addWeek(1);
   addXP(o.xp);
   launchShip();
   Sound.play('whoosh');
@@ -219,7 +222,7 @@ function plant(idx, crop, quiet) {
   if (S.credits < c.cost) return quiet ? false : fail('Ikke nok kreditter.');
   S.credits -= c.cost;
   const now = Date.now();
-  Object.assign(tile, { crop, start: now, end: now + c.time * growthMult() * 1000, last: crop });
+  Object.assign(tile, { crop, start: now, end: now + c.time * growthMult() * seasonCrop() * 1000, last: crop });
   S.lastCrop = crop;
   if (!quiet) Sound.play('plant');
   save();
@@ -231,7 +234,8 @@ function harvest(idx, auto) {
   if (!tile || tile.t !== 'plot' || !tile.crop || Date.now() < tile.end) return false;
   if (!spaceFor(HARVEST_YIELD)) return auto ? false : fail('Lageret er fuldt. Sælg varer, eller udvid lageret.');
   const crop = tile.crop;
-  const n = HARVEST_YIELD + (hasTech('hoest') && Math.random() < 0.25 && spaceFor(HARVEST_YIELD + 1) ? 1 : 0);
+  const extra = (hasTech('hoest') && Math.random() < 0.25) || (season().id === 'efteraar' && Math.random() < 0.2);
+  const n = HARVEST_YIELD + (extra && spaceFor(HARVEST_YIELD + 1) ? 1 : 0);
   addItem(crop, n);
   S.stats.harvest++;
   track('harvest', n);
@@ -253,7 +257,7 @@ function enqueue(idx, rid) {
   const now = Date.now();
   const last = tile.queue[tile.queue.length - 1];
   const start = Math.max(now, last ? last.end : 0);
-  tile.queue.push({ r: rid, start, end: start + r.time * speedOf(tile) * 1000 });
+  tile.queue.push({ r: rid, start, end: start + r.time * buildTime(idx) * 1000 });
   Sound.play('queue');
   save();
   return true;
@@ -307,6 +311,7 @@ function buildOn(idx, what) {
     toast(`${icon(what)} ${a.name} bygget! Fodr ${a.animalName.toLowerCase()} med foder fra foderfabrikken.`, 'good', 4000);
   } else {
     const b = BUILDINGS[what];
+    if (b.needs && S.specials[idx] !== b.needs) return fail(`${b.name} kan kun bygges på en ${SPECIALS[b.needs].name.toLowerCase()}.`);
     if (S.credits < b.cost) return fail('Ikke nok kreditter.');
     S.credits -= b.cost;
     S.tiles[idx] = { t: 'b', id: what, queue: [] };
@@ -325,13 +330,23 @@ function neighbourCleared(idx) {
 }
 
 function clearTile(idx) {
-  const cost = clearCost(S.cleared);
+  const cost = clearCost(S.cleared) * (S.specials[idx] ? 2 : 1);
   if (S.credits < cost) return fail('Ikke nok kreditter.');
   S.credits -= cost;
   S.cleared++;
   S.tiles[idx] = { t: 'empty' };
   addXP(2);
-  if (spaceFor(1) && Math.random() < 0.6) { addItem('jern', 1); floatItems(idx, [['jern', 1]]); }
+  const sp = S.specials[idx];
+  if (sp === 'ruin') {
+    delete S.specials[idx];
+    addItem('artefakt', 1); addItem('krystal', 2);
+    S.stats.artefakter++;
+    floatItems(idx, [['artefakt', 1], ['krystal', 2]]);
+    Sound.play('level');
+    toast(`${icon('ruin')} Du fandt et artefakt og 2 krystaller i ruinen!`, 'good', 4000);
+  } else if (sp) {
+    toast(`${icon(SPECIALS[sp].sprite)} ${SPECIALS[sp].name}! ${SPECIALS[sp].desc}`, 'good', 4500);
+  } else if (spaceFor(1) && Math.random() < 0.6) { addItem('jern', 1); floatItems(idx, [['jern', 1]]); }
   burst(idx, '#B89A88');
   Sound.play('build');
   save();
@@ -412,6 +427,7 @@ function deliverColonist() {
   S.colonist = null;
   S.colonistNextAt = Date.now() + 90 * 1000;
   giveTickets(2);
+  addWeek(1);
   S.stats.deliver++;
   track('deliver', 1);
   Sound.play('coin');
@@ -794,6 +810,7 @@ function loadCrate(i) {
   addItem(c.item, -c.n);
   c.done = true;
   giveTickets(2);
+  addWeek(1);
   const pay = orderPay(c.credits);
   earn(pay);
   addXP(c.xp);
@@ -882,6 +899,8 @@ function buyFest(i) {
 // Byt indholdet af to felter. Afgrøder, køer og dyr flytter med.
 function swapTiles(a, b) {
   if (a === b || S.tiles[a].t === 'locked' || S.tiles[b].t === 'locked') return false;
+  const needs = (t, i) => t.t === 'b' && BUILDINGS[t.id].needs && S.specials[i] !== BUILDINGS[t.id].needs;
+  if (needs(S.tiles[a], b) || needs(S.tiles[b], a)) return fail('Krystalboret skal stå på en krystalåre.');
   [S.tiles[a], S.tiles[b]] = [S.tiles[b], S.tiles[a]];
   S.pickups = S.pickups.filter((p) => p.idx !== a && p.idx !== b);
   save();
@@ -912,6 +931,8 @@ function arcadeReward(score, golden) {
 function adviceList() {
   const now = Date.now(), out = [];
   const find = (fn) => S.tiles.findIndex(fn);
+  const mp = missionProgress();
+  if (S.tut >= TUTORIAL.length && mp && mp.done) out.push({ icon: 'mission', text: 'En mission er klaret. Hent belønningen.', act: 'missions' });
   const readyPlots = S.tiles.filter((t) => t.t === 'plot' && t.crop && now >= t.end).length;
   if (readyPlots) out.push({ icon: 'sprout', text: `Høst ${readyPlots} ${readyPlots === 1 ? 'moden kuppel' : 'modne kupler'}. Træk fingeren hen over dem.`, idx: find((t) => t.t === 'plot' && t.crop && now >= t.end) });
   const doneB = find((t) => t.t === 'b' && t.queue && t.queue.some((q) => q.end <= now));
@@ -935,6 +956,7 @@ function adviceList() {
   if (invTotal() >= cap() * 0.9) out.push({ icon: 'box', text: 'Lageret er næsten fuldt. Sælg på Rumbørsen, eller udvid det.', act: 'inventory' });
   if (claimableGoals()) out.push({ icon: 'goal', text: 'Du har et ugemål, der er klar til at blive hentet.', act: 'colony' });
   if (isFestival() && FEST_SHOP.some((f) => f.tickets <= S.tickets)) out.push({ icon: 'festbillet', text: 'Du har billetter nok til noget i festivalbutikken.', act: 'festival' });
+  if (S.tut >= TUTORIAL.length && S.stats.helped < 3) out.push({ icon: 'nabo', text: 'Besøg en nabo, og giv en hånd med. I får begge en belønning.', act: 'neighbors' });
   if (S.level >= ARCADE.level && arcadePlaysLeft()) out.push({ icon: 'joystick', text: `Du har ${arcadePlaysLeft()} runder asteroidejagt tilbage i dag.`, act: 'arcade' });
   if (!out.length) {
     const rock = S.tiles.findIndex((t, i) => t.t === 'locked' && neighbourCleared(i));
@@ -953,4 +975,75 @@ function readyCount() {
   if (S.expedition && now >= S.expedition.end) n++;
   n += S.orders.filter(canFulfil).length;
   return n;
+}
+
+// ---------- Version 6: årstider ----------
+const seasonIndex = (now = Date.now()) => Math.floor(now / SEASON_MS) % SEASONS.length;
+const season = (now) => SEASONS[seasonIndex(now)];
+const seasonEnds = (now = Date.now()) => (Math.floor(now / SEASON_MS) + 1) * SEASON_MS;
+const seasonCrop = () => ({ foraar: 0.85, vinter: 1.2 }[season().id] || 1);
+// Produktionstid for en bygning: opgraderinger, sommer, og isbor om vinteren eller på et iskrater.
+function buildTime(idx) {
+  const t = S.tiles[idx];
+  let k = speedOf(t);
+  if (season().id === 'sommer') k *= 0.85;
+  if (t.id === 'isbor') {
+    if (S.specials[idx] === 'ice') k *= 0.5;
+    if (season().id === 'vinter') k *= 0.5;
+  }
+  return k;
+}
+
+// ---------- Version 6: særlige felter ----------
+// Placeres én gang pr. koloni under klipper, der ikke er ryddet endnu.
+function ensureSpecials(st = S) {
+  if (st.specials) return st;
+  st.specials = {};
+  const open = (i) => {
+    const r = Math.floor(i / COLS), c = i % COLS;
+    return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].some(([rr, cc]) =>
+      rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && st.tiles[idxOf(rr, cc)].t !== 'locked');
+  };
+  const locked = st.tiles.map((t, i) => i).filter((i) => st.tiles[i].t === 'locked');
+  const plan = ['ice', 'ice', 'ice', 'crystal', 'crystal', 'crystal', 'ruin', 'ruin', 'ruin'];
+  for (const type of plan) {
+    if (!locked.length) break;
+    // lidt væk fra startområdet, så man skal udvide for at finde dem
+    const far = locked.filter((i) => !open(i));
+    const pool = far.length ? far : locked;
+    const i = pool[Math.floor(Math.random() * pool.length)];
+    st.specials[i] = type;
+    locked.splice(locked.indexOf(i), 1);
+  }
+  return st;
+}
+
+// ---------- Version 6: ugens konkurrence ----------
+function addWeek(n) {
+  const id = weekId();
+  if (S.weekScore.id !== id) S.weekScore = { id, n: 0 };
+  S.weekScore.n += n;
+}
+const weekPrizeFor = (place) => WEEK_PRIZES.find((p) => place <= p.upTo);
+
+// ---------- Version 6: missioner ----------
+const currentMission = () => MISSIONS[S.mission];
+function missionProgress(m = currentMission()) {
+  if (!m) return null;
+  const [cur, target] = m.p();
+  return { cur: Math.min(cur, target), target, done: cur >= target };
+}
+function claimMission() {
+  const m = currentMission(), pr = missionProgress(m);
+  if (!m || !pr.done) return false;
+  earn(m.reward);
+  addXP(Math.round(m.reward / 10));
+  if (m.krystal) addItem('krystal', m.krystal);
+  S.mission++;
+  Sound.play('level');
+  const next = currentMission();
+  const chapterDone = !next || next.ch !== m.ch;
+  toast(`${icon('mission')} Mission klaret: +${m.reward} ${icon('coin')}${m.krystal ? ` og ${m.krystal} ${icon('krystal')}` : ''}${chapterDone && next ? ` · Nyt kapitel: ${MISSION_CHAPTERS[next.ch].title}` : ''}`, 'good', 4500);
+  save();
+  return true;
 }

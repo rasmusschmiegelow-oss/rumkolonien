@@ -354,3 +354,18 @@ body.editing #tutorial { display: none; }
   border-radius: 12px; background: #fff;
 }
 .tabs { flex-wrap: wrap; }
+
+/* ---------- Version 6 ---------- */
+.banner.top.mission { pointer-events: auto; cursor: pointer; }
+.banner.top.mission b { white-space: nowrap; }
+.banner.top.mission.done { background: #E7F7EA; animation: nudge 1.6s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: translateX(-50%) scale(1.03); } }
+.banner.visit { pointer-events: auto; background: #EAF6FF; z-index: 3; }
+.banner.visit button { padding: 4px 12px; }
+body.visiting .fab, body.visiting #tutorial { display: none; }
+button.stat.clock { cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
+.lb-name .tiny { padding: 1px 7px; font-size: 11px; margin-left: 6px; box-shadow: 0 2px 0 var(--line); border-width: 2px; vertical-align: 1px; }
+.week-info { background: #FFF6DC; border: 2px solid #E6D9CC; border-radius: 12px; padding: 8px 10px; margin-top: 4px; }
+.perks { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: #2E7D46; }
+.row.special { background: #EAF6FF; }
+@media (max-width: 640px) { .clock { display: inline-flex; } .banner.top.mission span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; } }

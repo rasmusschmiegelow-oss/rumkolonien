@@ -76,6 +76,7 @@ const RECIPES = {
   chilisauce: { in: { chili: 3, tomat: 1 },             time: 240, xp: 15, level: 12 },
   vin:        { in: { druer: 3 },                       time: 600, xp: 30, level: 14 },
   foder:      { in: { kartoffel: 2, alge: 1 },          time: 30,  xp: 2,  level: 3 },
+  krystal:    { in: { jern: 4 },                        time: 1800, xp: 20, level: 7 },
   ost:        { in: { maelk: 2 },                       time: 120, xp: 8,  level: 6 },
   pandekage:  { in: { aeg: 1, maelk: 1, hvede: 1 },     time: 90,  xp: 9,  level: 6 },
 };
@@ -95,6 +96,7 @@ const BUILDINGS = {
   krydderilab:   { name: 'Krydderilab',    level: 12, cost: 1600, recipes: ['chilisauce'] },
   garage:        { name: 'Rovergarage',    level: 7,  cost: 1000, recipes: [], garage: true, desc: 'Send roveren på ekspedition efter krystaller og artefakter.' },
   lab:           { name: 'Forskningslab',  level: 8,  cost: 1500, recipes: [], lab: true, desc: 'Forsk i teknologier, der gør kolonien bedre for altid.' },
+  krystalbor:    { name: 'Krystalbor',     level: 7,  cost: 2000, recipes: ['krystal'], needs: 'crystal', desc: 'Kan kun bygges på en krystalåre.' },
   vinkaelder:    { name: 'Vinkælder',      level: 14, cost: 2500, recipes: ['vin'] },
 };
 const QUEUE_MAX = 3;
@@ -150,6 +152,8 @@ const MEDALS = [
   { id: 'happy', name: 'Lykkelig koloni',    desc: 'Nå 30 lykkepoint med pynt.',           test: () => happiness() >= HAPPY_MAX, reward: 500 },
   { id: 'trade', name: 'Børshaj',            desc: 'Sælg 100 varer på Rumbørsen.',         test: () => S.stats.sold >= 100, reward: 250 },
   { id: 'arc',   name: 'Asteroidejæger',     desc: 'Få 40 point i asteroidejagt.',          test: () => S.arcade.best >= 40, reward: 200 },
+  { id: 'nabo',  name: 'Nabohjælper',           desc: 'Hjælp 10 naboer.',                      test: () => S.stats.helped >= 10, reward: 300 },
+  { id: 'miss',  name: 'Missionen fuldført', desc: 'Gennemfør alle missioner.',              test: () => S.mission >= MISSIONS.length, reward: 2000 },
   { id: 'fest',  name: 'Festabe',            desc: 'Sæt festivalpynt op.',                  test: () => S.tiles.some((t) => t.t === 'deco' && DECOR[t.id].fest), reward: 150 },
 ];
 
@@ -284,3 +288,66 @@ const FEST_SHOP = [
 
 // Asteroidejagt: et minispil på 30 sekunder, 3 gange om dagen.
 const ARCADE = { level: 4, plays: 3, seconds: 30 };
+
+// ---------- Version 6 ----------
+
+// Årstider: hver varer to døgn, så et Mars-år tager otte dage.
+const SEASON_MS = 2 * 24 * 60 * 60 * 1000;
+const SEASONS = [
+  { id: 'foraar',   name: 'Forår',   desc: 'Afgrøderne gror 15 % hurtigere.' },
+  { id: 'sommer',   name: 'Sommer',  desc: 'Solpanelerne giver strøm nok til, at bygningerne producerer 15 % hurtigere.' },
+  { id: 'efteraar', name: 'Efterår', desc: 'Høsttid: 20 % chance for en ekstra afgrøde, når du høster.' },
+  { id: 'vinter',   name: 'Vinter',  desc: 'Afgrøderne gror 20 % langsommere, men isboret laver vand dobbelt så hurtigt.' },
+];
+
+// Særlige felter gemmer sig under klipperne.
+const SPECIALS = {
+  ice:     { name: 'Iskrater',   sprite: 'iskrater',    desc: 'Et isbor her laver vand dobbelt så hurtigt.' },
+  crystal: { name: 'Krystalåre', sprite: 'krystalaare', desc: 'Her kan du bygge et krystalbor, der laver krystaller.' },
+  ruin:    { name: 'Ruin',       sprite: 'ruin',        desc: 'Ryd den, og find et artefakt og krystaller.' },
+};
+
+// Naboer: belønning for at hjælpe og for at blive hjulpet.
+const HELP_REWARD = (lvl) => 30 + 5 * lvl;
+const GIFT_REWARD = { credits: 50, xp: 5 };
+
+// Ugens konkurrence: leverancer (ordrer, kolonister og containere) fra mandag til søndag.
+const WEEK_PRIZES = [
+  { upTo: 1,  credits: 1500, krystal: 3, text: '1. plads' },
+  { upTo: 3,  credits: 800,  krystal: 2, text: 'Top 3' },
+  { upTo: 10, credits: 400,  krystal: 1, text: 'Top 10' },
+  { upTo: Infinity, credits: 100, krystal: 0, text: 'Deltager' },
+];
+
+// Missioner: en kampagne i fem kapitler, fortalt af kolonisterne.
+const MISSION_CHAPTERS = [
+  { title: 'Landingen', col: 'ida', intro: 'Velkommen til Mars! Lad os få kolonien til at stå på egne ben.' },
+  { title: 'Det grønne', col: 'bo', intro: 'Planter og dyr er livet herude. Lad os gøre kolonien grønnere.' },
+  { title: 'Handel', col: 'kim', intro: 'Skibene kommer oftere nu. Kolonien skal kunne handle med hele solsystemet.' },
+  { title: 'Ud i det ukendte', col: 'dina', intro: 'Der er mere på Mars end rødt støv. Lad os udforske planeten.' },
+  { title: 'Fremtiden', col: 'ida', intro: 'Det sidste skridt: en koloni, man kan være stolt af.' },
+];
+const plots = () => S.tiles.filter((t) => t.t === 'plot').length;
+const decoCount = () => S.tiles.filter((t) => t.t === 'deco').length;
+const MISSIONS = [
+  { ch: 0, text: 'Høst 10 gange',                   p: () => [S.stats.harvest, 10],                         reward: 60 },
+  { ch: 0, text: 'Lever 3 ordrer',                  p: () => [S.stats.deliver, 3],                          reward: 80 },
+  { ch: 0, text: 'Hav 8 drivhuskupler',             p: () => [plots(), 8],                                  reward: 100 },
+  { ch: 0, text: 'Nå niveau 3',                     p: () => [S.level, 3],                                  reward: 150, krystal: 1 },
+  { ch: 1, text: 'Byg en foderfabrik',              p: () => [+owns('foderfabrik'), 1],                     reward: 120 },
+  { ch: 1, text: 'Byg et hønsehus',                 p: () => [+S.tiles.some((t) => t.t === 'pen'), 1],      reward: 150 },
+  { ch: 1, text: 'Producér 30 varer',               p: () => [S.stats.produce, 30],                         reward: 200 },
+  { ch: 1, text: 'Sæt 3 stykker pynt op',           p: () => [decoCount(), 3],                              reward: 250, krystal: 1 },
+  { ch: 2, text: 'Fyld alle containere på moderskibet', p: () => [S.stats.ships, 1],                        reward: 300 },
+  { ch: 2, text: 'Sælg 30 varer på Rumbørsen',      p: () => [S.stats.sold, 30],                            reward: 250 },
+  { ch: 2, text: 'Lever 25 ordrer',                 p: () => [S.stats.deliver, 25],                         reward: 350 },
+  { ch: 2, text: 'Hjælp 3 naboer',                  p: () => [S.stats.helped, 3],                           reward: 300, krystal: 2 },
+  { ch: 3, text: 'Byg rovergaragen',                p: () => [+owns('garage'), 1],                          reward: 400 },
+  { ch: 3, text: 'Gennemfør 3 ekspeditioner',       p: () => [S.stats.expeditions, 3],                      reward: 500 },
+  { ch: 3, text: 'Byg forskningslabbet',            p: () => [+owns('lab'), 1],                             reward: 500 },
+  { ch: 3, text: 'Gennemfør 2 forskningsprojekter', p: () => [Object.keys(S.research.done).length, 2],      reward: 600, krystal: 2 },
+  { ch: 4, text: 'Byg et krystalbor på en krystalåre', p: () => [+owns('krystalbor'), 1],                   reward: 800 },
+  { ch: 4, text: 'Opgradér 3 bygninger',            p: () => [S.tiles.filter((t) => t.lvl >= 2).length, 3], reward: 800 },
+  { ch: 4, text: 'Nå 20 i lykke',                   p: () => [happiness(), 20],                             reward: 1000 },
+  { ch: 4, text: 'Nå niveau 15',                    p: () => [S.level, 15],                                 reward: 3000, krystal: 5 },
+];

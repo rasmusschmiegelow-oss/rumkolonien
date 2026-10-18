@@ -64,6 +64,7 @@ const Cloud = (() => {
 
   function submitScores() {
     const scores = { level: S.level, arcade: S.arcade.best, medals: Object.keys(S.medals).length };
+    if (S.weekScore.id === weekId() && S.weekScore.n) scores['week:' + S.weekScore.id] = Math.min(3000, S.weekScore.n);
     for (const [board, score] of Object.entries(scores)) {
       if (sent[board] === score) continue;
       sent[board] = score;
@@ -133,8 +134,10 @@ const Cloud = (() => {
         else if (c) { pushedAt = Math.min(S.savedAt || 0, Number(c.saved_at)); lastOk = Date.now(); status = 'ok'; }
       } catch (e) { status = 'offline'; }
     }
-    push(true);
-    setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY) { lastPush = Date.now(); push(); } }, 5000);
+    await push(true);
+    claimGifts();
+    checkWeekPrize();
+    setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY) { lastPush = Date.now(); push(); checkWeekPrize(); } }, 5000);
     document.addEventListener('visibilitychange', () => { if (document.hidden) push(false, true); });
     // Et link indsat i samme fane ændrer kun #-delen, så siden genindlæses ikke.
     window.addEventListener('hashchange', () => { fromLink(); });
@@ -144,8 +147,43 @@ const Cloud = (() => {
     return rpc('get_leaderboard', { p_board: board, p_key: key });
   }
 
+  // Hjælp fra naboer, mens man var væk.
+  async function claimGifts() {
+    try {
+      const n = await rpc('claim_gifts', { p_key: key });
+      if (!n) return;
+      const credits = GIFT_REWARD.credits * n, xp = GIFT_REWARD.xp * n;
+      earn(credits); addXP(xp); save();
+      toast(`${icon('nabo')} ${n} ${n === 1 ? 'nabo har' : 'naboer har'} hjulpet din koloni: +${credits} ${icon('coin')} +${xp} ${icon('xp')}`, 'good', 5000);
+    } catch (e) { /* prøver igen næste gang */ }
+  }
+
+  // Præmie for en afsluttet uge, som spilleren deltog i.
+  async function checkWeekPrize() {
+    const w = S.weekScore;
+    if (!w.id || w.id === weekId() || !w.n || S.weekPrize[w.id]) return;
+    try {
+      const res = await rpc('get_leaderboard', { p_board: 'week:' + w.id, p_key: key });
+      const place = res && res.me ? res.me.place : null;
+      if (!place) return;
+      const prize = weekPrizeFor(place);
+      S.weekPrize[w.id] = place;
+      earn(prize.credits);
+      if (prize.krystal) addItem('krystal', prize.krystal);
+      save();
+      showModal(`${icon('pokal')} Ugens konkurrence er slut`, `
+        <div class="levelup"><div class="big-num">${place}.</div><p>plads med ${w.n} leverancer · ${prize.text}</p>
+        <div class="unlocks"><span>${icon('coin')} +${prize.credits}</span>${prize.krystal ? `<span>${icon('krystal')} +${prize.krystal}</span>` : ''}</div>
+        <button class="primary wide" data-act="close">Hent præmien</button></div>`);
+      Sound.play('level');
+    } catch (e) { /* prøver igen næste gang */ }
+  }
+
   return {
     start, push, leaderboard, adopt,
+    neighbors: () => rpc('list_neighbors', { p_key: key }),
+    visit: (id) => rpc('visit_colony', { p_id: id }),
+    help: (id) => rpc('help_colony', { p_key: key, p_id: id }),
     get key() { return key; },
     get link() { return `${location.origin}${location.pathname}#koloni=${key}`; },
     get status() { return status; },

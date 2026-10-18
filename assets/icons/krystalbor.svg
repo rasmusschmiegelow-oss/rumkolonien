@@ -1,0 +1,16 @@
+<svg width="96" height="96" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" style="display: inline-block">
+  <g>
+    <path d="M8 70l40 20v-8L8 62z" fill="#5C6270" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M48 90l40-20v-8L48 82z" fill="#363A45" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M8 62l40 20 40-20-40-20z" fill="#7C7F8C" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M30 64L48 12l18 52" fill="none" stroke="#8E4FC2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M36 46h24M40 32h16" fill="none" stroke="#8E4FC2" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M42 14h12l-6-8z" fill="#F5C243" stroke="#2A1A14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M48 52v18" fill="none" stroke="#2A1A14" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <g>
+    <path d="M18 66l2-8 4 3v6z" fill="#B17FDB" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M72 64l2-10 4 4v6z" fill="#B17FDB" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M44 74l3-10 5 4v7z" fill="#8E4FC2" stroke="#2A1A14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

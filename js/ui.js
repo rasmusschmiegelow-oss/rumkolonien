@@ -41,6 +41,7 @@ function toast(html, kind = '', ms = 2800) {
 function onTile(idx) {
   const tile = S.tiles[idx];
   const now = Date.now();
+  if (visiting) return toast(`Du besøger ${escapeHtml(visiting.name)}. Tryk på "Tilbage" for at komme hjem.`);
   if (editMode) return editTap(idx);
   if (collectPickup(idx)) return;
   Sound.play('click');
@@ -174,13 +175,17 @@ function openBuilding(idx) {
     const locked = r.level > S.level;
     return `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(rid)}</div>
-      <div class="info"><b>${ITEMS[rid].name}</b><small>${locked ? `Låses op på niveau ${r.level}` : `${fmtTime(r.time * speedOf(tile))} · +${r.xp} ${icon('xp', 'ic-s')}`}</small>
+      <div class="info"><b>${ITEMS[rid].name}</b><small>${locked ? `Låses op på niveau ${r.level}` : `${fmtTime(r.time * buildTime(idx))} · +${r.xp} ${icon('xp', 'ic-s')}`}</small>
       ${locked ? '' : `<div class="needs">${needList(r.in)}</div>`}</div>
       <button class="primary" data-act="make" data-idx="${idx}" data-arg="${rid}">Producér</button>
     </div>`;
   }).join('');
+  const perks = [];
+  if (tile.id === 'isbor' && S.specials[idx] === 'ice') perks.push(`${icon('iskrater', 'ic-s')} Står på et iskrater: dobbelt så hurtig`);
+  if (tile.id === 'isbor' && season().id === 'vinter') perks.push(`${icon('vinter', 'ic-s')} Vinter: dobbelt så hurtig`);
+  if (season().id === 'sommer') perks.push(`${icon('sommer', 'ic-s')} Sommer: 15 % hurtigere`);
   showModal(`${icon(tile.id)} ${b.name}`,
-    `<div class="section-title" id="bcount"></div>
+    `${perks.length ? `<p class="perks">${perks.join(' · ')}</p>` : ''}<div class="section-title" id="bcount"></div>
      <div class="queue" id="bslots"></div>
      <p id="bcollect" hidden><button class="primary wide" data-act="collect" data-idx="${idx}">Saml færdige varer</button></p>
      <div class="section-title">Opskrifter</div><div class="list">${rows}</div>
@@ -385,13 +390,17 @@ function openBuild(idx) {
       <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${locked || S.credits < a.cost ? 'disabled' : ''}>${a.cost} ${icon('coin', 'ic-s')}</button>
     </div>`;
   }
+  const sp = S.specials[idx];
+  if (sp) rows = `<div class="row special"><div class="ico">${icon(SPECIALS[sp].sprite)}</div><div class="info"><b>${SPECIALS[sp].name}</b><small>${SPECIALS[sp].desc}</small></div></div>` + rows;
   for (const [id, b] of Object.entries(BUILDINGS)) {
     const built = owns(id), locked = b.level > S.level;
-    const what = b.recipes.length ? 'Laver ' + b.recipes.map((r) => ITEMS[r].name.toLowerCase()).join(', ') : b.desc;
+    const wrongGround = b.needs && sp !== b.needs;
+    const what = wrongGround ? `Kan kun bygges på en ${SPECIALS[b.needs].name.toLowerCase()}`
+      : b.recipes.length ? 'Laver ' + b.recipes.map((r) => ITEMS[r].name.toLowerCase()).join(', ') : b.desc;
     rows += `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(id)}</div>
       <div class="info"><b>${b.name}</b><small>${built ? 'Allerede bygget' : locked ? `Låses op på niveau ${b.level}` : what}</small></div>
-      <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${built || locked || S.credits < b.cost ? 'disabled' : ''}>${b.cost} ${icon('coin', 'ic-s')}</button>
+      <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${built || locked || wrongGround || S.credits < b.cost ? 'disabled' : ''}>${b.cost} ${icon('coin', 'ic-s')}</button>
     </div>`;
   }
   let deco = '';
@@ -417,7 +426,12 @@ function openBuild(idx) {
 }
 
 function openClear(idx) {
-  const cost = clearCost(S.cleared);
+  const sp = S.specials[idx];
+  const cost = clearCost(S.cleared) * (sp ? 2 : 1);
+  if (sp) {
+    return showModal(`${icon(SPECIALS[sp].sprite)} ${SPECIALS[sp].name}`, `<p>Under klipperne her gemmer sig en ${SPECIALS[sp].name.toLowerCase()}. ${SPECIALS[sp].desc}</p>
+      <button class="primary wide" data-act="clear" data-idx="${idx}" ${S.credits < cost ? 'disabled' : ''}>Ryd feltet · ${cost} ${icon('coin', 'ic-s')}</button>`);
+  }
   showModal(`${icon('rock')} Klipper`, `<p>Ryd klipperne, og gør plads til flere kupler og bygninger. Måske finder du jernmalm.</p>
     <button class="primary wide" data-act="clear" data-idx="${idx}" ${S.credits < cost ? 'disabled' : ''}>Ryd feltet · ${cost} ${icon('coin', 'ic-s')}</button>`);
 }
@@ -444,7 +458,7 @@ function openColony(tab = 'goals') {
     });
     body += '</div>';
   } else if (tab === 'board') {
-    body += `<div class="tabs sub">${[['level', 'Niveau'], ['arcade', 'Asteroidejagt'], ['medals', 'Medaljer']]
+    body += `<div class="tabs sub">${[['week', 'Ugens leverancer'], ['level', 'Niveau'], ['arcade', 'Asteroidejagt'], ['medals', 'Medaljer']]
       .map(([k, l]) => `<button class="${k === openColony.board ? 'on' : ''}" data-act="board" data-arg="${k}">${l}</button>`).join('')}</div>
       <div id="boardList"><p class="muted">Henter ranglisten …</p></div>
       <p class="muted small">Du hedder <b>${escapeHtml(S.playerName)}</b> på ranglisten. Du kan skifte navn under ? → Din koloni i skyen.</p>`;
@@ -484,22 +498,102 @@ function openColony(tab = 'goals') {
     `<div class="tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-arg="${k}">${l}</button>`).join('')}</div>${body}`);
 }
 
-openColony.board = 'level';
+openColony.board = 'week';
 async function loadBoard(board) {
   const el = $('boardList');
   if (!el) return;
+  const isWeek = board === 'week';
+  if (isWeek) board = 'week:' + weekId();
   try {
     const res = await Cloud.leaderboard(board);
     if (!$('boardList')) return;
-    const unit = board === 'level' ? 'niveau' : board === 'arcade' ? 'point' : 'medaljer';
+    const unit = board === 'level' ? 'niveau' : board === 'arcade' ? 'point' : isWeek ? 'leverancer' : 'medaljer';
     const rows = (res.top || []).map((r) => `<div class="lb-row ${r.me ? 'me' : ''}">
       <span class="lb-place">${r.place <= 3 ? ['🥇', '🥈', '🥉'][r.place - 1] : r.place}</span>
-      <span class="lb-name">${escapeHtml(r.name)}</span><span class="lb-score">${board === 'level' ? `<small>niveau</small> ${r.score}` : `${r.score} <small>${unit}</small>`}</span></div>`).join('');
+      <span class="lb-name">${escapeHtml(r.name)}${r.me ? '' : ` <button class="tiny" data-act="visit" data-arg="${r.id}">Besøg</button>`}</span><span class="lb-score">${board === 'level' ? `<small>niveau</small> ${r.score}` : `${r.score} <small>${unit}</small>`}</span></div>`).join('');
     const me = res.me && res.me.place > 50 ? `<div class="lb-row me"><span class="lb-place">${res.me.place}</span><span class="lb-name">${escapeHtml(S.playerName)}</span><span class="lb-score">${res.me.score}</span></div>` : '';
-    $('boardList').innerHTML = rows ? `<div class="lb">${rows}${me}</div>` : '<p class="muted">Ingen på ranglisten endnu. Bliv den første!</p>';
+    const head = isWeek ? `<p class="small week-info">${icon('pokal', 'ic-s')} Hver ordre, kolonist og container tæller. Ugen slutter søndag kl. 24. Præmier: 1. plads ${WEEK_PRIZES[0].credits} ${icon('coin', 'ic-s')} + ${WEEK_PRIZES[0].krystal} ${icon('krystal', 'ic-s')}, top 3, top 10 og alle deltagere får noget. Du har <b>${S.weekScore.id === weekId() ? S.weekScore.n : 0}</b> denne uge.</p>` : '';
+    $('boardList').innerHTML = head + (rows ? `<div class="lb">${rows}${me}</div>` : '<p class="muted">Ingen på ranglisten endnu. Bliv den første!</p>');
   } catch (e) {
     $('boardList').innerHTML = '<p class="muted">Ranglisten kan ikke hentes lige nu. Tjek din forbindelse.</p>';
   }
+}
+
+// ---------- Naboer ----------
+async function openNeighbors() {
+  showModal(`${icon('nabo')} Naboer`, `<p class="muted tip">Besøg andre kolonier, og hjælp dem en gang om dagen. Du får ${HELP_REWARD(S.level)} ${icon('coin', 'ic-s')} for hver nabo, du hjælper, og de får en gave, næste gang de spiller.</p><div id="nbList"><p class="muted">Leder efter naboer …</p></div>`);
+  try {
+    const list = await Cloud.neighbors();
+    if (!$('nbList')) return;
+    $('nbList').innerHTML = list.length ? `<div class="list">${list.map((n) => `<div class="row">
+      <div class="ico">${icon('nabo')}</div><div class="info"><b>${escapeHtml(n.name)}</b><small>Niveau ${n.level}${n.helped ? ' · hjulpet i dag' : ''}</small></div>
+      <button data-act="visit" data-arg="${n.id}">Besøg</button>
+      <button class="primary" data-act="helpnb" data-arg="${n.id}" ${n.helped ? 'disabled' : ''}>Hjælp</button></div>`).join('')}</div>`
+      : '<p class="muted">Der er ingen andre kolonister endnu. Del spillet med en ven!</p>';
+  } catch (e) {
+    if ($('nbList')) $('nbList').innerHTML = '<p class="muted">Naboerne kan ikke hentes lige nu. Tjek din forbindelse.</p>';
+  }
+}
+
+async function visitNeighbor(id) {
+  try {
+    const v = await Cloud.visit(id);
+    if (!v || !Array.isArray(v.tiles) || v.tiles.length !== COLS * ROWS) return fail('Kolonien kan ikke vises.');
+    closeModal();
+    startVisit(v);
+    $('visitName').textContent = `${v.name} · niveau ${v.level}`;
+    $('visitHelp').dataset.arg = id;
+    $('visitHelp').disabled = false;
+    $('visitBanner').hidden = false;
+    document.body.classList.add('visiting');
+    Sound.play('whoosh');
+  } catch (e) { fail('Kolonien kunne ikke hentes. Tjek din forbindelse.'); }
+}
+
+function leaveVisit() {
+  endVisit();
+  $('visitBanner').hidden = true;
+  document.body.classList.remove('visiting');
+}
+
+async function helpNeighbor(id, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await Cloud.help(id);
+    if (r && r.ok) {
+      const credits = HELP_REWARD(S.level);
+      earn(credits);
+      S.stats.helped++;
+      giveTickets(1);
+      save();
+      Sound.play('coin');
+      toast(`${icon('nabo')} Du hjalp din nabo: +${credits} ${icon('coin')}`, 'good');
+    } else {
+      const why = { already: 'Du har allerede hjulpet denne nabo i dag.', limit: 'Du kan hjælpe 10 naboer om dagen. Kom igen i morgen.', self: 'Det er din egen koloni.' }[r && r.reason] || 'Det lykkedes ikke.';
+      toast(why);
+    }
+  } catch (e) { fail('Ingen forbindelse lige nu.'); if (btn) btn.disabled = false; }
+}
+
+// ---------- Missioner ----------
+function openMissions() {
+  const m = currentMission();
+  if (!m) {
+    return showModal(`${icon('mission')} Missioner`, `<div class="levelup"><div class="big-num">20/20</div><p>Alle missioner er klaret. Kolonien er klar til fremtiden!</p></div>`);
+  }
+  const ch = MISSION_CHAPTERS[m.ch];
+  const inCh = MISSIONS.map((x, i) => ({ ...x, i })).filter((x) => x.ch === m.ch);
+  const rows = inCh.map((x) => {
+    const done = x.i < S.mission, cur = x.i === S.mission, pr = missionProgress(x);
+    return `<div class="row ${done ? 'claimed' : ''} ${!done && !cur ? 'locked' : ''}">
+      <div class="ico">${icon(done ? 'medalje' : 'mission')}</div>
+      <div class="info"><b>${x.text}</b>${cur ? `<div class="pbar"><div style="width:${pr.cur / pr.target * 100}%"></div></div><small>${pr.cur}/${pr.target} · +${x.reward} ${icon('coin', 'ic-s')}${x.krystal ? ` +${x.krystal} ${icon('krystal', 'ic-s')}` : ''}</small>` : `<small>+${x.reward} ${icon('coin', 'ic-s')}</small>`}</div>
+      ${cur ? `<button class="primary" data-act="claimmission" ${pr.done ? '' : 'disabled'}>Hent</button>` : done ? '<button disabled>Klaret</button>' : ''}
+    </div>`;
+  }).join('');
+  showModal(`${icon('mission')} Kapitel ${m.ch + 1}: ${ch.title}`, `
+    <div class="colonist"><div class="portrait">${icon('col-' + ch.col, 'ic-xl')}</div><div class="col-body"><b>${COLONISTS[ch.col].name}</b><p class="quote">“${ch.intro}”</p></div></div>
+    <div class="section-title">Mission ${S.mission + 1} af ${MISSIONS.length}</div><div class="list">${rows}</div>`);
 }
 
 function cloudStatusText() {
@@ -647,6 +741,8 @@ document.addEventListener('click', (e) => {
       if (a.act === 'colony') return openColony('goals');
       if (a.act === 'festival') return openFestival();
       if (a.act === 'arcade') return openArcade();
+      if (a.act === 'missions') return openMissions();
+      if (a.act === 'neighbors') return openNeighbors();
       closeModal();
       focusTile(a.idx);
       return;
@@ -672,6 +768,16 @@ document.addEventListener('click', (e) => {
         () => toast('Linket er kopieret. Åbn det på din anden enhed.', 'good', 4000),
         () => { $('savebox').innerHTML = `<textarea readonly rows="3">${link}</textarea>`; });
       return;
+    }
+    case 'neighbors': Sound.play('click'); return openNeighbors();
+    case 'visit': return visitNeighbor(arg);
+    case 'leavevisit': Sound.play('click'); return leaveVisit();
+    case 'helpnb': return helpNeighbor(arg, btn);
+    case 'missions': Sound.play('click'); return openMissions();
+    case 'claimmission': { const lvl = S.level; claimMission(); if (S.level === lvl) openMissions(); return; }
+    case 'season': {
+      const se = season();
+      return toast(`${icon(se.id)} <b>${se.name}</b>: ${se.desc} Skifter om ${fmtTime((seasonEnds() - Date.now()) / 1000)}.`, '', 5000);
     }
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
@@ -711,12 +817,21 @@ function updateHUD() {
   $('happyNum').textContent = `${h} %`;
   $('silo').classList.toggle('full', invTotal() >= cap());
   const clk = solClock();
-  $('clock').innerHTML = `${icon(clk.night ? 'moon' : 'sun', 'ic-s')} Sol ${clk.sol} · ${clk.time}`;
+  const clockHtml = `${icon(season().id, 'ic-s')} ${season().name} · ${icon(clk.night ? 'moon' : 'sun', 'ic-s')} ${clk.time}`;
+  if ($('clock').dataset.html !== clockHtml) { $('clock').innerHTML = clockHtml; $('clock').dataset.html = clockHtml; }
 
   const tb = $('tutorial');
   if (S.tut < TUTORIAL.length) {
     tb.hidden = false;
+    tb.classList.remove('mission');
     tb.innerHTML = `<span class="step">${S.tut + 1}/${TUTORIAL.length}</span> ${TUTORIAL[S.tut].text}`;
+  } else if (currentMission()) {
+    const m = currentMission(), pr = missionProgress(m);
+    tb.hidden = false;
+    tb.classList.add('mission');
+    tb.classList.toggle('done', pr.done);
+    const html = `${icon('mission', 'ic-s')} <span>${m.text}</span> <b>${pr.done ? 'Klar! Tryk for at hente' : `${pr.cur}/${pr.target}`}</b>`;
+    if (tb.dataset.html !== html) { tb.innerHTML = html; tb.dataset.html = html; }
   } else tb.hidden = true;
 
   const eb = $('eventBanner'), ev = S.event, now = Date.now();

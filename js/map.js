@@ -120,7 +120,10 @@ function drawGround(idx) {
   if (t.t !== 'locked') {
     ctx.strokeStyle = '#2A1A1418'; ctx.lineWidth = 1; ctx.stroke();
   }
-  if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad' && t.t !== 'pen' && t.t !== 'deco') {
+  const sp = S.specials && S.specials[idx];
+  if (sp && (t.t === 'locked' || t.t === 'empty')) {
+    drawSprite(ctx, SPECIALS[sp].sprite, x, y, TW * 1.05, 70);
+  } else if (hash(idx + 99) > 0.6 && t.t !== 'plot' && t.t !== 'b' && t.t !== 'pad' && t.t !== 'pen' && t.t !== 'deco') {
     ctx.fillStyle = '#00000022';
     ctx.beginPath(); ctx.ellipse(x + (hash(idx + 7) - 0.5) * 30, y + (hash(idx + 8) - 0.5) * 10, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -166,7 +169,10 @@ function drawTile(idx, now, t) {
   const foot = 70; // y-koordinat for feltets midte i 96px-sprites
 
   if (tile.t === 'locked') {
-    if (hash(idx + 3) > 0.55) drawSprite(ctx, 'rock', x + (hash(idx + 5) - 0.5) * 20, y + 4, 96 * SPRITE_K * (0.45 + hash(idx + 6) * 0.3), 74);
+    if (S.specials && S.specials[idx]) {
+      // glimt, så man kan se, at der gemmer sig noget under klipperne
+      if (Math.sin(now / 400 + idx) > 0.92) particles.push({ x: x + rand(-14, 14), y: y - 6, vx: 0, vy: -20, life: 0.6, color: '#FFFFFF', s: 2.5, puff: true });
+    } else if (hash(idx + 3) > 0.55) drawSprite(ctx, 'rock', x + (hash(idx + 5) - 0.5) * 20, y + 4, 96 * SPRITE_K * (0.45 + hash(idx + 6) * 0.3), 74);
   } else if (tile.t === 'empty') {
     diamond(x, y, TW * 0.7, TH * 0.7);
     ctx.setLineDash([5, 5]); ctx.strokeStyle = '#FFE0C866'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
@@ -277,6 +283,30 @@ function drawTile(idx, now, t) {
   }
 }
 
+function drawSeasonGround() {
+  const id = season().id;
+  if (id === 'vinter') {
+    ctx.fillStyle = 'rgba(235, 245, 255, 0.28)';
+    for (let i = 0; i < S.tiles.length; i++) {
+      const [x, y] = tileCenter(i);
+      diamond(x, y, TW + 1, TH + 1); ctx.fill();
+    }
+  } else if (id === 'foraar') {
+    ctx.fillStyle = '#7FD68F';
+    for (let i = 0; i < S.tiles.length; i++) {
+      if (S.tiles[i].t !== 'locked' && S.tiles[i].t !== 'empty') continue;
+      const [x, y] = tileCenter(i);
+      for (let k = 0; k < 3; k++) {
+        if (hash(i * 7 + k) < 0.5) continue;
+        ctx.beginPath(); ctx.arc(x + (hash(i + k * 13) - 0.5) * 50, y + (hash(i + k * 29) - 0.5) * 20, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  } else if (id === 'efteraar') {
+    ctx.fillStyle = 'rgba(224, 122, 46, 0.12)';
+    for (let i = 0; i < S.tiles.length; i++) { const [x, y] = tileCenter(i); diamond(x, y, TW + 1, TH + 1); ctx.fill(); }
+  }
+}
+
 function drawArrow(idx, now) {
   const [x, y] = tileCenter(idx);
   const ay = y - 96 + Math.sin(now / 200) * 8;
@@ -349,7 +379,22 @@ function drawNight(light, phase) {
 }
 
 const dust = Array.from({ length: 70 }, (_, i) => ({ x: hash(i) , y: hash(i + 50), s: 0.5 + hash(i + 9) }));
+const flakes = Array.from({ length: 90 }, (_, i) => ({ x: hash(i + 300), y: hash(i + 400), s: 0.5 + hash(i + 500) }));
+function drawSnow(now) {
+  if (season().id !== 'vinter') return;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (const f of flakes) {
+    const y = ((f.y + now / 9000 * f.s) % 1) * viewH;
+    const x = ((f.x + Math.sin(now / 1500 + f.y * 10) * 0.01) % 1) * viewW;
+    ctx.beginPath(); ctx.arc(x, y, 1.2 + f.s * 1.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawWeather(now) {
+  drawSnow(now);
   const ev = S.event;
   if (!ev.type || now > ev.until) return;
   ctx.save();
@@ -374,7 +419,28 @@ function drawWeather(now) {
   ctx.restore();
 }
 
+// Besøg hos en nabo: kortet tegnes med naboens felter i stedet for dine egne.
+let visiting = null;
+function startVisit(v) {
+  const st = defaults({ tiles: v.tiles, specials: v.specials || {}, level: v.level, tut: TUTORIAL.length, orders: [] });
+  visiting = { ...v, state: st, cam: { ...cam } };
+  const real = S; S = st; centerCamera(); S = real;
+  editMode = false; hint = null;
+}
+function endVisit() {
+  if (!visiting) return;
+  Object.assign(cam, visiting.cam);
+  visiting = null;
+}
+
 function draw(now) {
+  if (!visiting) return drawScene(now);
+  const real = S;
+  S = visiting.state;
+  try { drawScene(now); } finally { S = real; }
+}
+
+function drawScene(now) {
   const t = Date.now();
   const phase = dayPhase(t), light = daylight(phase);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -382,6 +448,7 @@ function draw(now) {
   ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (viewW / 2 - cam.x * cam.z), dpr * (viewH / 2 - cam.y * cam.z));
 
   for (let i = 0; i < S.tiles.length; i++) drawGround(i);
+  drawSeasonGround();
   if (camGoal) {
     cam.x += (camGoal.x - cam.x) * 0.12; cam.y += (camGoal.y - cam.y) * 0.12;
     if (Math.hypot(camGoal.x - cam.x, camGoal.y - cam.y) < 1) camGoal = null;
@@ -400,7 +467,7 @@ function draw(now) {
   // Tegn i dybderækkefølge, så ting længere fremme dækker ting bagved.
   const order = [];
   for (let i = 0; i < S.tiles.length; i++) order.push({ d: Math.floor(i / COLS) + (i % COLS), fn: () => drawTile(i, now, t) });
-  for (const a of Object.values(agents)) if (a) order.push({ d: a.depth + 0.5, fn: () => drawAgent(a, now) });
+  if (!visiting) for (const a of Object.values(agents)) if (a) order.push({ d: a.depth + 0.5, fn: () => drawAgent(a, now) });
   order.sort((a, b) => a.d - b.d);
   for (const o of order) o.fn();
 
@@ -518,6 +585,7 @@ function findWork(a) {
 }
 
 function updateAgents(dt) {
+  if (visiting) return;
   ensureAgents();
   for (const a of Object.values(agents)) {
     if (!a) continue;

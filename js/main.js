@@ -1,7 +1,7 @@
 'use strict';
 // Opstart og hovedløkke.
 
-let lastFrame = performance.now(), lastTick = 0, lastModalTick = 0;
+let lastFrame = performance.now(), lastTick = 0, lastModalTick = 0, lastSeason = -1;
 
 function loop(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
@@ -15,6 +15,10 @@ function loop(now) {
     tutorialTick();
     medalTick();
     shipTick(t);
+    if (lastSeason !== seasonIndex(t)) {
+      if (lastSeason !== -1) { const se = season(t); toast(`${icon(se.id)} Nu er det <b>${se.name.toLowerCase()}</b> på Mars. ${se.desc}`, 'good', 6000); }
+      lastSeason = seasonIndex(t);
+    }
     researchTick(t);
   }
   updateAgents(dt);

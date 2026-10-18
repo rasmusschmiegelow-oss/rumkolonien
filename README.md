@@ -45,12 +45,20 @@ Spillet gemmes automatisk i browseren (`localStorage`).
 - **Rådgiveren "Hvad nu?":** Ida foreslår de bedste næste træk ud fra koloniens tilstand. Kameraet glider hen til det rigtige felt, og en pil viser hvor.
 - **Beskeder og app-badge:** Spillet kan give besked, når afgrøder, bygninger, dyr, roveren eller forskningen er klar, og viser antallet af ting, der venter, på app-ikonet. Uden server virker det kun, mens spillet er åbent i baggrunden.
 
+### Nyt i version 6
+
+- **Naboer:** Besøg andre spilleres kolonier fra nabolisten eller ranglisten, og se deres kort. Hjælp op til 10 naboer om dagen. Du får kreditter og en festbillet, og de får en gave, næste gang de spiller.
+- **Ugens konkurrence:** Ordrer, kolonister og containere tæller på ugens rangliste. Når ugen er slut, får alle deltagere en præmie, og top 1, 3 og 10 får mest.
+- **Missioner:** 20 missioner i 5 kapitler, fortalt af Ida, Bo, Kim og Dina. Den aktuelle mission står øverst på kortet.
+- **Særlige felter:** Under klipperne gemmer der sig iskratere (isboret laver vand dobbelt så hurtigt), krystalårer (krystalboret laver krystaller af jernmalm) og ruiner (artefakt og krystaller).
+- **Årstider:** forår, sommer, efterår og vinter med hver sin fordel. Hver årstid varer to døgn. Om vinteren ligger der frost og sne på kortet.
+
 ### Sky og ranglister (Supabase)
 
 - **Sky-gemning:** Kolonien gemmes automatisk i Supabase hvert minut, og når appen lukkes. Under **?** finder du dit hemmelige link. Åbn det på en anden telefon eller computer for at spille videre der. Har en anden enhed gemt en nyere udgave, spørger spillet, hvilken du vil beholde.
 - **Ranglister:** niveau, asteroidejagt og medaljer under **Koloni → Rangliste**. Du vælger selv dit navn.
 
-Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem fire funktioner: `save_colony`, `load_colony`, `submit_score` og `get_leaderboard`. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
+Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem funktioner: `save_colony`, `load_colony`, `submit_score`, `get_leaderboard`, `list_neighbors`, `visit_colony`, `help_colony` og `claim_gifts`. Et besøg viser kun navn, niveau og kortet, aldrig lager eller kreditter. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
 
 ## Grafik
 
