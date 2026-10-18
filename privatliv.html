@@ -18,7 +18,9 @@
     main { max-width: 680px; margin: 0 auto; background: var(--panel); border: 3px solid var(--ink); border-radius: 22px; box-shadow: 0 6px 0 var(--ink); padding: 28px 24px 32px; }
     header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
     header img { width: 64px; height: 64px; border-radius: 16px; border: 3px solid var(--ink); }
-    h1 { font-size: 34px; line-height: 1.1; letter-spacing: -0.03em; margin: 0; }
+    h1 { font-size: clamp(24px, 7vw, 34px); line-height: 1.1; letter-spacing: -0.03em; margin: 0; overflow-wrap: anywhere; }
+    header div { min-width: 0; }
+    @media (max-width: 420px) { main { padding: 22px 18px 26px; } header img { width: 52px; height: 52px; } }
     .sub { color: var(--muted); margin: 4px 0 0; font-size: 15px; }
     h2 { font-size: 20px; margin: 28px 0 8px; }
     p, li { font-size: 16px; line-height: 1.6; }
