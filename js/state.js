@@ -32,6 +32,7 @@ function defaults(st) {
     medals: {}, expedition: null,
     research: { done: {}, active: null }, ship: null, shipNext: 0,
     tickets: 0, decorInv: {}, arcade: { day: '', plays: 0, best: 0 },
+    playerName: '', savedAt: 0,
   }, st, { stats });
 }
 
@@ -55,6 +56,7 @@ function load() {
 }
 
 function save() {
+  S.savedAt = Date.now(); // bruges til at afgøre, hvilken udgave i skyen der er nyest
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* privat vindue */ }
 }
 

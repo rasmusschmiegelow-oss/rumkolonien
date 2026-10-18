@@ -45,6 +45,13 @@ Spillet gemmes automatisk i browseren (`localStorage`).
 - **Rådgiveren "Hvad nu?":** Ida foreslår de bedste næste træk ud fra koloniens tilstand. Kameraet glider hen til det rigtige felt, og en pil viser hvor.
 - **Beskeder og app-badge:** Spillet kan give besked, når afgrøder, bygninger, dyr, roveren eller forskningen er klar, og viser antallet af ting, der venter, på app-ikonet. Uden server virker det kun, mens spillet er åbent i baggrunden.
 
+### Sky og ranglister (Supabase)
+
+- **Sky-gemning:** Kolonien gemmes automatisk i Supabase hvert minut, og når appen lukkes. Under **?** finder du dit hemmelige link. Åbn det på en anden telefon eller computer for at spille videre der. Har en anden enhed gemt en nyere udgave, spørger spillet, hvilken du vil beholde.
+- **Ranglister:** niveau, asteroidejagt og medaljer under **Koloni → Rangliste**. Du vælger selv dit navn.
+
+Hver koloni har en hemmelig kolonikode, som kun findes på spillerens enheder. Databasen gemmer en sha256-hash af koden. Tabellerne har Row Level Security uden policies, så de kan ikke læses direkte. Alt går gennem fire funktioner: `save_colony`, `load_colony`, `submit_score` og `get_leaderboard`. Scorer med urealistiske værdier afvises, og en ældre enhed kan ikke overskrive en nyere gemning. Nøglen i `js/cloud.js` er Supabases offentlige *publishable* nøgle, som er beregnet til at ligge i browseren.
+
 ## Grafik
 
 Alle ikoner er tegnet i [Paper](https://paper.design) som ét samlet sæt: SVG på et gitter på 64 × 64 (bygninger 96 × 96 isometrisk) med en kontur på 3 px. De ligger i `assets/icons/`.
@@ -72,5 +79,6 @@ python3 -m http.server 8000
 | `js/music.js` | Genereret ambient-musik til dag og nat |
 | `js/arcade.js` | Minispillet Asteroidejagt |
 | `js/notify.js` | Beskeder og tal på app-ikonet |
+| `js/cloud.js` | Sky-gemning og ranglister i Supabase |
 | `js/main.js` | Opstart og hovedløkke |
 | `sw.js`, `manifest.webmanifest` | Installérbar app og offline-cache |

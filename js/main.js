@@ -50,6 +50,7 @@ async function start() {
   document.body.classList.add('ready');
   requestAnimationFrame(loop);
 
+  Cloud.start();
   const daily = checkDaily();
   if (S.tut === 0 && S.stats.harvest === 0) openHelp();
   else if (daily) showDaily(daily);

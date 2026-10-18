@@ -423,7 +423,7 @@ function openClear(idx) {
 }
 
 function openColony(tab = 'goals') {
-  const tabs = [['goals', 'Mål'], ['medals', 'Medaljer'], ['robots', 'Robotter'], ['people', 'Kolonister']];
+  const tabs = [['goals', 'Mål'], ['board', 'Rangliste'], ['medals', 'Medaljer'], ['robots', 'Robotter'], ['people', 'Kolonister']];
   let body = '';
   if (tab === 'goals') {
     const streak = S.daily.streak || 0, day = ((Math.max(1, streak) - 1) % 7) + 1;
@@ -443,6 +443,12 @@ function openColony(tab = 'goals') {
       </div>`;
     });
     body += '</div>';
+  } else if (tab === 'board') {
+    body += `<div class="tabs sub">${[['level', 'Niveau'], ['arcade', 'Asteroidejagt'], ['medals', 'Medaljer']]
+      .map(([k, l]) => `<button class="${k === openColony.board ? 'on' : ''}" data-act="board" data-arg="${k}">${l}</button>`).join('')}</div>
+      <div id="boardList"><p class="muted">Henter ranglisten …</p></div>
+      <p class="muted small">Du hedder <b>${escapeHtml(S.playerName)}</b> på ranglisten. Du kan skifte navn under ? → Din koloni i skyen.</p>`;
+    setTimeout(() => loadBoard(openColony.board), 0);
   } else if (tab === 'medals') {
     const got = MEDALS.filter((m) => S.medals[m.id]).length;
     body += `<p class="muted small">${got} af ${MEDALS.length} medaljer</p><div class="medals">`;
@@ -476,6 +482,30 @@ function openColony(tab = 'goals') {
   }
   showModal(`${icon('goal')} Kolonien${S.mayor ? ' · Koloniborgmester 🏅' : ''}`,
     `<div class="tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-arg="${k}">${l}</button>`).join('')}</div>${body}`);
+}
+
+openColony.board = 'level';
+async function loadBoard(board) {
+  const el = $('boardList');
+  if (!el) return;
+  try {
+    const res = await Cloud.leaderboard(board);
+    if (!$('boardList')) return;
+    const unit = board === 'level' ? 'niveau' : board === 'arcade' ? 'point' : 'medaljer';
+    const rows = (res.top || []).map((r) => `<div class="lb-row ${r.me ? 'me' : ''}">
+      <span class="lb-place">${r.place <= 3 ? ['🥇', '🥈', '🥉'][r.place - 1] : r.place}</span>
+      <span class="lb-name">${escapeHtml(r.name)}</span><span class="lb-score">${board === 'level' ? `<small>niveau</small> ${r.score}` : `${r.score} <small>${unit}</small>`}</span></div>`).join('');
+    const me = res.me && res.me.place > 50 ? `<div class="lb-row me"><span class="lb-place">${res.me.place}</span><span class="lb-name">${escapeHtml(S.playerName)}</span><span class="lb-score">${res.me.score}</span></div>` : '';
+    $('boardList').innerHTML = rows ? `<div class="lb">${rows}${me}</div>` : '<p class="muted">Ingen på ranglisten endnu. Bliv den første!</p>';
+  } catch (e) {
+    $('boardList').innerHTML = '<p class="muted">Ranglisten kan ikke hentes lige nu. Tjek din forbindelse.</p>';
+  }
+}
+
+function cloudStatusText() {
+  if (Cloud.status === 'offline') return 'Ingen forbindelse. Kolonien gemmes stadig på denne enhed og sendes, når nettet er tilbage.';
+  if (Cloud.lastOk) return `Gemt i skyen kl. ${new Date(Cloud.lastOk).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}.`;
+  return 'Forbinder …';
 }
 
 function showLevelUp(level, bonus, unlocks) {
@@ -525,8 +555,12 @@ function openHelp() {
     <div class="section-title">Beskeder</div>
     <p class="small">Få besked, når afgrøder, bygninger, roveren eller forskningen er klar. Det virker, mens spillet er åbent i baggrunden, og bedst når det er installeret som app.</p>
     <button data-act="notify" ${Notify.supported() ? '' : 'disabled'}>${icon('klokke', 'ic-s')} ${Notify.on ? 'Slå beskeder fra' : 'Giv mig besked'}</button>
-    <div class="section-title">Spil på flere enheder</div>
-    <p class="small">Med en gemmekode kan du flytte din koloni til en anden telefon eller computer.</p>
+    <div class="section-title">Din koloni i skyen</div>
+    <p class="small">${cloudStatusText()} Åbn dit hemmelige link på en anden telefon eller computer for at spille videre der. Del det ikke med andre, for linket giver adgang til kolonien.</p>
+    <label class="namefield">Dit navn på ranglisten <input id="playerName" maxlength="20" value="${escapeHtml(S.playerName)}"></label>
+    <div class="btnrow"><button class="primary" data-act="copylink">Kopiér mit link</button><button data-act="cloudsave">Gem nu</button></div>
+    <div class="section-title">Gemmekode uden net</div>
+    <p class="small">Du kan også flytte kolonien med en gemmekode, som du indsætter manuelt.</p>
     <div class="btnrow"><button data-act="export">Vis gemmekode</button><button data-act="import">Indlæs gemmekode</button>
     ${installPrompt ? '<button class="primary" data-act="install">Installér som app</button>' : ''}</div>
     <div id="savebox"></div>
@@ -628,12 +662,32 @@ document.addEventListener('click', (e) => {
         if (!modal.hidden) openHelp();
       });
       return;
+    case 'cloudtake': return Cloud.take();
+    case 'cloudkeep': return Cloud.keep();
+    case 'board': openColony.board = arg; return openColony('board');
+    case 'cloudsave': save(); Cloud.push(true).then(() => { toast(Cloud.status === 'ok' ? 'Gemt i skyen.' : 'Ingen forbindelse lige nu.', Cloud.status === 'ok' ? 'good' : 'bad'); if (!modal.hidden) openHelp(); }); return;
+    case 'copylink': {
+      const link = Cloud.link;
+      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(
+        () => toast('Linket er kopieret. Åbn det på din anden enhed.', 'good', 4000),
+        () => { $('savebox').innerHTML = `<textarea readonly rows="3">${link}</textarea>`; });
+      return;
+    }
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;
   }
 });
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'playerName') return;
+  const name = e.target.value.trim().slice(0, 20);
+  if (name.length < 2) { e.target.value = S.playerName; return fail('Navnet skal være mindst 2 tegn.'); }
+  S.playerName = name;
+  save();
+  Cloud.push(true);
+  toast(`Du hedder nu ${escapeHtml(name)} på ranglisten.`, 'good');
+});
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
 // ---------- HUD ----------

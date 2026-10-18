@@ -335,3 +335,22 @@ body.editing #tutorial { display: none; }
   .fab .advisor span { display: none; }
   .fab .advisor { width: 52px; padding: 4px; }
 }
+
+/* ---------- Sky og rangliste ---------- */
+.tabs.sub button { font-size: 13px; padding: 5px 8px; }
+.lb { display: grid; gap: 4px; }
+.lb-row {
+  display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 8px;
+  background: #fff; border: 2px solid #E6D9CC; border-radius: 12px; padding: 7px 12px;
+}
+.lb-row.me { border: 2.5px solid var(--line); background: #FFE7D2; }
+.lb-place { font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.lb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.lb-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.lb-score small { color: var(--muted); font-weight: 500; }
+.namefield { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); margin: 8px 0 10px; }
+.namefield input {
+  font: inherit; font-size: 16px; color: var(--ink); padding: 8px 10px; border: 2.5px solid var(--line);
+  border-radius: 12px; background: #fff;
+}
+.tabs { flex-wrap: wrap; }
