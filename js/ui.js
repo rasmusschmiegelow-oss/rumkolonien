@@ -41,6 +41,7 @@ function toast(html, kind = '', ms = 2800) {
 function onTile(idx) {
   const tile = S.tiles[idx];
   const now = Date.now();
+  if (editMode) return editTap(idx);
   if (collectPickup(idx)) return;
   Sound.play('click');
   switch (tile.t) {
@@ -61,6 +62,63 @@ function onTile(idx) {
       if (!neighbourCleared(idx)) return toast('Ryd et felt ved siden af først.');
       return openClear(idx);
   }
+}
+
+// ---------- Redigering ----------
+function setEdit(on) {
+  editMode = on;
+  editSel = -1;
+  closeModal();
+  $('editBanner').hidden = !on;
+  document.body.classList.toggle('editing', on);
+  if (on) Sound.play('click');
+}
+
+function editTap(idx) {
+  const t = S.tiles[idx];
+  if (t.t === 'locked') return toast('Ryd klipperne, før du kan bygge her.');
+  if (editSel < 0) {
+    if (t.t === 'empty') return toast('Vælg først det, du vil flytte.');
+    editSel = idx;
+    Sound.play('click');
+    return;
+  }
+  if (idx === editSel) { editSel = -1; return; }
+  swapTiles(editSel, idx);
+  resetAgents();
+  burst(idx, '#FF7A1A');
+  Sound.play('build');
+  editSel = -1;
+}
+
+// ---------- Rådgiver og festival ----------
+function openAdvisor() {
+  const list = adviceList().slice(0, 5);
+  showModal(`${icon('col-ida')} Hvad nu?`, `
+    <p class="quote">“Her er, hvad jeg ville gøre lige nu.” <span class="muted">— Ida</span></p>
+    <div class="list">${list.map((a, i) => `<div class="row">
+      <div class="ico">${icon(a.icon)}</div><div class="info"><b>${a.text}</b></div>
+      ${a.idx >= 0 || a.act ? `<button class="primary" data-act="advice" data-arg="${i}">${a.act ? 'Åbn' : 'Vis'}</button>` : ''}
+    </div>`).join('')}</div>`);
+  openAdvisor.list = list;
+}
+
+function openFestival() {
+  if (!isFestival()) {
+    return showModal(`${icon('festbillet')} Marsfestivalen`, `
+      <p>Festivalen holdes hver torsdag til søndag fra niveau ${FESTIVAL.level}. Ordrer, kolonister og moderskibet giver festbilletter, som du kan bruge i festivalbutikken.</p>
+      <p>Næste festival starter om <b><span data-until="${festivalStarts()}"></span></b>. Du har ${S.tickets} ${icon('festbillet', 'ic-s')}.</p>`);
+  }
+  const rows = FEST_SHOP.map((f, i) => {
+    const name = f.kind === 'decor' ? DECOR[f.id].name : f.kind === 'item' ? `${f.n} × ${ITEMS[f.id].name}` : `${f.n} kreditter`;
+    const sub = f.kind === 'decor' ? `Eksklusiv pynt · +${DECOR[f.id].happy} lykke${S.decorInv[f.id] ? ` · du har ${S.decorInv[f.id]} pakket ned` : ''}` : 'Byttes med det samme';
+    return `<div class="row"><div class="ico">${icon(f.id)}</div><div class="info"><b>${name}</b><small>${sub}</small></div>
+      <button class="primary" data-act="festbuy" data-arg="${i}" ${S.tickets >= f.tickets ? '' : 'disabled'}>${f.tickets} ${icon('festbillet', 'ic-s')}</button></div>`;
+  }).join('');
+  showModal(`${icon('festbillet')} Marsfestivalen`, `
+    <div class="fest-head"><span>Du har <b>${S.tickets}</b> ${icon('festbillet', 'ic-s')}</span><span>Slutter om <span data-until="${festivalEnds()}"></span></span></div>
+    <p class="muted small">Hver ordre giver 1–3 billetter, kolonister og containere på moderskibet giver 2.</p>
+    <div class="list">${rows}</div>`);
 }
 
 // ---------- Dialoger ----------
@@ -338,6 +396,7 @@ function openBuild(idx) {
   }
   let deco = '';
   for (const [id, d] of Object.entries(DECOR)) {
+    if (d.fest) continue;
     const locked = d.level > S.level;
     deco += `<div class="row ${locked ? 'locked' : ''}">
       <div class="ico">${icon(id)}</div>
@@ -345,7 +404,15 @@ function openBuild(idx) {
       <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}" ${locked || S.credits < d.cost ? 'disabled' : ''}>${d.cost} ${icon('coin', 'ic-s')}</button>
     </div>`;
   }
+  let fest = '';
+  for (const [id, n] of Object.entries(S.decorInv || {})) {
+    if (!n) continue;
+    fest += `<div class="row"><div class="ico">${icon(id)}</div>
+      <div class="info"><b>${DECOR[id].name}</b><small>Festivalpynt · +${DECOR[id].happy} lykke · du har ${n}</small></div>
+      <button class="primary" data-act="build" data-idx="${idx}" data-arg="${id}">Sæt op</button></div>`;
+  }
   showModal(`${icon('box')} Byg her`, `<div class="list">${rows}</div>
+    ${fest ? `<div class="section-title">Festivalpynt</div><div class="list">${fest}</div>` : ''}
     <div class="section-title">Pynt · lykke ${happiness()}/${HAPPY_MAX}</div><div class="list">${deco}</div>`);
 }
 
@@ -455,6 +522,9 @@ function openHelp() {
       <div class="row"><div class="ico">${icon('moon')}</div><div class="info"><b>Dag og nat</b><small>En sol (Mars-dag) varer 8 minutter. Solnedgangen er blå på Mars.</small></div></div>
     </div>
     <p class="muted small">Træk i kortet for at flytte det, og knib eller scroll for at zoome. Spillet gemmes i din browser.</p>
+    <div class="section-title">Beskeder</div>
+    <p class="small">Få besked, når afgrøder, bygninger, roveren eller forskningen er klar. Det virker, mens spillet er åbent i baggrunden, og bedst når det er installeret som app.</p>
+    <button data-act="notify" ${Notify.supported() ? '' : 'disabled'}>${icon('klokke', 'ic-s')} ${Notify.on ? 'Slå beskeder fra' : 'Giv mig besked'}</button>
     <div class="section-title">Spil på flere enheder</div>
     <p class="small">Med en gemmekode kan du flytte din koloni til en anden telefon eller computer.</p>
     <div class="btnrow"><button data-act="export">Vis gemmekode</button><button data-act="import">Indlæs gemmekode</button>
@@ -533,6 +603,31 @@ document.addEventListener('click', (e) => {
     case 'install':
       if (installPrompt) { installPrompt.prompt(); installPrompt = null; closeModal(); }
       return;
+    case 'edit': return setEdit(!editMode);
+    case 'editdone': return setEdit(false);
+    case 'advisor': Sound.play('click'); return openAdvisor();
+    case 'advice': {
+      const a = (openAdvisor.list || [])[Number(arg)];
+      if (!a) return;
+      if (a.act === 'inventory') return openInventory('boers');
+      if (a.act === 'colony') return openColony('goals');
+      if (a.act === 'festival') return openFestival();
+      if (a.act === 'arcade') return openArcade();
+      closeModal();
+      focusTile(a.idx);
+      return;
+    }
+    case 'festival': Sound.play('click'); return openFestival();
+    case 'festbuy': if (buyFest(Number(arg))) openFestival(); return;
+    case 'arcade': Sound.play('click'); return openArcade();
+    case 'arcadestart': return startArcade();
+    case 'notify':
+      Notify.toggle().then((on) => {
+        if (on === 'denied') toast('Browseren har blokeret beskeder fra spillet. Du kan tillade dem i browserens indstillinger for siden.', 'bad', 5000);
+        else toast(on ? `${icon('klokke')} Du får besked, når noget er klar.` : 'Beskeder er slået fra.', on ? 'good' : '');
+        if (!modal.hidden) openHelp();
+      });
+      return;
     case 'reset':
       if (confirm('Vil du slette din koloni og starte forfra?')) { newState(); save(); closeModal(); centerCamera(); }
       return;
@@ -552,6 +647,11 @@ function updateHUD() {
   setBadge('orderBadge', ready);
   setBadge('colonyBadge', claimableGoals());
   $('silo').textContent = `${invTotal()}/${cap()}`;
+  const fest = isFestival();
+  $('festChip').hidden = !fest;
+  if (fest) $('festNum').textContent = S.tickets;
+  $('arcadeBtn').hidden = S.level < ARCADE.level;
+  Notify.badge(readyCount());
   const h = happiness();
   $('happy').hidden = !h;
   $('happyNum').textContent = `${h} %`;

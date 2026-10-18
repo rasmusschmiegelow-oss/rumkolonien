@@ -1,12 +1,13 @@
 // Service worker: gør spillet installérbart og spilbart uden net.
-const CACHE = 'rumkolonien-v5';
+const CACHE = 'rumkolonien-v6';
 const FILES = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/data.js', 'js/audio.js', 'js/music.js', 'js/sprites.js', 'js/state.js', 'js/map.js', 'js/ui.js', 'js/main.js',
+  'js/data.js', 'js/audio.js', 'js/music.js', 'js/arcade.js', 'js/notify.js', 'js/sprites.js', 'js/state.js', 'js/map.js', 'js/ui.js', 'js/main.js',
   'assets/app-192.png', 'assets/app-512.png',
   "assets/icons/aeg.svg",
   "assets/icons/alge.svg",
   "assets/icons/artefakt.svg",
+  "assets/icons/asteroide.svg",
   "assets/icons/bageri.svg",
   "assets/icons/batteri.svg",
   "assets/icons/batterifabrik.svg",
@@ -26,10 +27,15 @@ const FILES = [
   "assets/icons/container.svg",
   "assets/icons/deco-flag.svg",
   "assets/icons/deco-lampe.svg",
+  "assets/icons/deco-lanterne.svg",
+  "assets/icons/deco-raketmonument.svg",
   "assets/icons/deco-springvand.svg",
   "assets/icons/deco-statue.svg",
+  "assets/icons/deco-teleskop.svg",
   "assets/icons/deco-trae.svg",
   "assets/icons/druer.svg",
+  "assets/icons/festbillet.svg",
+  "assets/icons/flyt.svg",
   "assets/icons/foder.svg",
   "assets/icons/foderfabrik.svg",
   "assets/icons/garage.svg",
@@ -46,9 +52,11 @@ const FILES = [
   "assets/icons/isbor.svg",
   "assets/icons/jern.svg",
   "assets/icons/jordbaer.svg",
+  "assets/icons/joystick.svg",
   "assets/icons/kaffe.svg",
   "assets/icons/kaffebar.svg",
   "assets/icons/kartoffel.svg",
+  "assets/icons/klokke.svg",
   "assets/icons/krydderilab.svg",
   "assets/icons/krystal.svg",
   "assets/icons/kuppel.svg",
@@ -118,4 +126,13 @@ self.addEventListener('fetch', (e) => {
   } else {
     e.respondWith(fromNet().catch(() => fromCache()));
   }
+});
+
+// Tryk på en besked åbner spillet.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const w = list.find((c) => 'focus' in c);
+    return w ? w.focus() : self.clients.openWindow('./');
+  }));
 });

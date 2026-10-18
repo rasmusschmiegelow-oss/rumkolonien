@@ -9,6 +9,9 @@ const cam = { x: 0, y: 0, z: 1 };
 let viewW = 0, viewH = 0, dpr = 1;
 
 const floaters = [], particles = [], rockets = [];
+let editMode = false, editSel = -1; // redigeringstilstand: valgt felt
+let hint = null;                    // rådgiverens pil: { idx, until }
+let camGoal = null;                 // kameraet glider hen mod et felt
 const agents = { hoster: null, pakker: null };
 
 // ---------- Koordinater ----------
@@ -40,6 +43,12 @@ function centerCamera() {
   cam.x = sx / cleared.length; cam.y = sy / cleared.length;
   cam.z = Math.max(fitZoom(), Math.min(1.2, 0.55 + viewW / 1800));
   clampCam();
+}
+
+function focusTile(idx) {
+  const [x, y] = tileCenter(idx);
+  camGoal = { x, y: y - 30 };
+  hint = { idx, until: Date.now() + 6000 };
 }
 
 function resize() {
@@ -373,6 +382,20 @@ function draw(now) {
   ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (viewW / 2 - cam.x * cam.z), dpr * (viewH / 2 - cam.y * cam.z));
 
   for (let i = 0; i < S.tiles.length; i++) drawGround(i);
+  if (camGoal) {
+    cam.x += (camGoal.x - cam.x) * 0.12; cam.y += (camGoal.y - cam.y) * 0.12;
+    if (Math.hypot(camGoal.x - cam.x, camGoal.y - cam.y) < 1) camGoal = null;
+    clampCam();
+    ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (viewW / 2 - cam.x * cam.z), dpr * (viewH / 2 - cam.y * cam.z));
+  }
+  if (editMode) {
+    for (let i = 0; i < S.tiles.length; i++) {
+      if (S.tiles[i].t === 'locked') continue;
+      const [x, y] = tileCenter(i);
+      diamond(x, y, TW - 6, TH - 3);
+      ctx.setLineDash([6, 5]); ctx.strokeStyle = '#FFFFFFAA'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
 
   // Tegn i dybderækkefølge, så ting længere fremme dækker ting bagved.
   const order = [];
@@ -380,6 +403,16 @@ function draw(now) {
   for (const a of Object.values(agents)) if (a) order.push({ d: a.depth + 0.5, fn: () => drawAgent(a, now) });
   order.sort((a, b) => a.d - b.d);
   for (const o of order) o.fn();
+
+  // Det valgte felt i redigeringstilstand markeres oven på alt andet.
+  if (editMode && editSel >= 0) {
+    const [x, y] = tileCenter(editSel);
+    const pulse = 0.5 + Math.sin(now / 150) * 0.5;
+    diamond(x, y, TW - 4, TH - 2);
+    ctx.fillStyle = `rgba(255,122,26,${0.18 + pulse * 0.12})`; ctx.fill();
+    ctx.strokeStyle = '#FF7A1A'; ctx.lineWidth = 4; ctx.stroke();
+    drawSprite(ctx, 'flyt', x, y - 96 + pulse * 4, 34);
+  }
 
   drawNight(light, phase);
 
@@ -402,7 +435,7 @@ function draw(now) {
     }
   }
 
-  const tgt = tutorialTarget();
+  const tgt = hint && hint.until > Date.now() ? hint.idx : tutorialTarget();
   if (tgt >= 0) drawArrow(tgt, now);
 
   // raketter
@@ -454,6 +487,10 @@ function draw(now) {
 function homeOf() {
   const pad = S.tiles.findIndex((t) => t.t === 'pad');
   return tileCenter(pad >= 0 ? pad : 0);
+}
+
+function resetAgents() {
+  for (const a of Object.values(agents)) if (a) { a.target = -1; a.wait = 0.5; }
 }
 
 function ensureAgents() {
@@ -557,7 +594,10 @@ canvas.addEventListener('pointermove', (e) => {
   const dx = x - drag.sx, dy = y - drag.sy;
   if (drag.mode === 'pending' && Math.hypot(dx, dy) > 8) {
     const tile = S.tiles[drag.start];
-    if (tile && tile.t === 'plot' && tile.crop && Date.now() >= tile.end) {
+    camGoal = null;
+    if (editMode) {
+      drag.mode = 'pan';
+    } else if (tile && tile.t === 'plot' && tile.crop && Date.now() >= tile.end) {
       drag.mode = 'harvest'; harvest(drag.start);
     } else if (tile && tile.t === 'plot' && !tile.crop && S.lastCrop && plant(drag.start, S.lastCrop, true)) {
       drag.mode = 'plant';

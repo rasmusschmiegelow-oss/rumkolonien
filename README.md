@@ -37,6 +37,14 @@ Spillet gemmes automatisk i browseren (`localStorage`).
 - **Rumbørsen:** priserne skifter hver time, tre varer er i høj kurs hver dag, og du kan købe råvarer, når du mangler dem.
 - **Musik:** stille ambient-musik genereret i browseren. Den skifter mellem en lys skala om dagen og en dybere om natten og kan slås til og fra for sig.
 
+### Nyt i version 5
+
+- **Redigeringstilstand:** tryk på flyt-knappen, vælg en bygning, kuppel, indhegning eller pynt, og tryk hvor den skal stå. To ting kan bytte plads, og afgrøder, køer og dyr flytter med.
+- **Asteroidejagt** (fra niveau 4): et minispil på 30 sekunder, hvor du trykker asteroiderne væk, før de rammer Mars. Det giver kreditter og jernmalm, og de sjældne krystaller giver ekstra. Man kan spille 3 runder om dagen.
+- **Marsfestivalen** (fra niveau 3): hver torsdag til søndag. Ordrer, kolonister og moderskibet giver festbilletter, der kan bruges på eksklusiv pynt (lanternebue, stjernekikkert og raketmonument), krystaller og kreditter.
+- **Rådgiveren "Hvad nu?":** Ida foreslår de bedste næste træk ud fra koloniens tilstand. Kameraet glider hen til det rigtige felt, og en pil viser hvor.
+- **Beskeder og app-badge:** Spillet kan give besked, når afgrøder, bygninger, dyr, roveren eller forskningen er klar, og viser antallet af ting, der venter, på app-ikonet. Uden server virker det kun, mens spillet er åbent i baggrunden.
+
 ## Grafik
 
 Alle ikoner er tegnet i [Paper](https://paper.design) som ét samlet sæt: SVG på et gitter på 64 × 64 (bygninger 96 × 96 isometrisk) med en kontur på 3 px. De ligger i `assets/icons/`.
@@ -62,5 +70,7 @@ python3 -m http.server 8000
 | `js/audio.js` | Lydeffekter med Web Audio |
 | `js/sprites.js` | Indlæsning af SVG-grafikken |
 | `js/music.js` | Genereret ambient-musik til dag og nat |
+| `js/arcade.js` | Minispillet Asteroidejagt |
+| `js/notify.js` | Beskeder og tal på app-ikonet |
 | `js/main.js` | Opstart og hovedløkke |
 | `sw.js`, `manifest.webmanifest` | Installérbar app og offline-cache |

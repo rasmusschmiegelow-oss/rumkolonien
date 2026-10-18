@@ -26,6 +26,7 @@
         <small id="xptext">0/15</small>
       </div>
       <div class="stat happy" id="happy" title="Koloniens lykke: bonus på alle ordrer" hidden><img class="ic" src="assets/icons/lykke.svg" alt=""><b id="happyNum">0 %</b></div>
+      <button class="stat fest-chip" id="festChip" data-act="festival" title="Marsfestivalen" hidden><img class="ic" src="assets/icons/festbillet.svg" alt=""><b id="festNum">0</b></button>
       <div class="stat clock" id="clock" title="Tid på Mars"></div>
     </div>
     <nav class="actions">
@@ -43,6 +44,12 @@
       <canvas id="map" aria-label="Kort over kolonien"></canvas>
       <div id="tutorial" class="banner top" hidden></div>
       <div id="eventBanner" class="banner bottom" hidden></div>
+      <div id="editBanner" class="banner top edit" hidden><img class="ic" src="assets/icons/flyt.svg" alt=""> Tryk på noget for at vælge det, og tryk derefter, hvor det skal stå. <button class="primary" data-act="editdone">Færdig</button></div>
+      <div class="fab">
+        <button data-act="arcade" id="arcadeBtn" title="Asteroidejagt" aria-label="Asteroidejagt" hidden><img src="assets/icons/joystick.svg" alt=""></button>
+        <button data-act="edit" title="Flyt ting rundt" aria-label="Flyt ting rundt"><img src="assets/icons/flyt.svg" alt=""></button>
+        <button data-act="advisor" class="advisor" title="Hvad nu?"><img src="assets/icons/col-ida.svg" alt=""><span>Hvad nu?</span></button>
+      </div>
     </div>
   </main>
 
@@ -64,7 +71,9 @@
   <script src="js/sprites.js"></script>
   <script src="js/state.js"></script>
   <script src="js/map.js"></script>
+  <script src="js/notify.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/arcade.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

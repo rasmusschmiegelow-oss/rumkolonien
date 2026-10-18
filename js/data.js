@@ -149,6 +149,8 @@ const MEDALS = [
   { id: 'resall',name: 'Fremtidens koloni',  desc: 'Gennemfør al forskning.',              test: () => Object.keys(S.research.done).length >= Object.keys(RESEARCH).length, reward: 2000 },
   { id: 'happy', name: 'Lykkelig koloni',    desc: 'Nå 30 lykkepoint med pynt.',           test: () => happiness() >= HAPPY_MAX, reward: 500 },
   { id: 'trade', name: 'Børshaj',            desc: 'Sælg 100 varer på Rumbørsen.',         test: () => S.stats.sold >= 100, reward: 250 },
+  { id: 'arc',   name: 'Asteroidejæger',     desc: 'Få 40 point i asteroidejagt.',          test: () => S.arcade.best >= 40, reward: 200 },
+  { id: 'fest',  name: 'Festabe',            desc: 'Sæt festivalpynt op.',                  test: () => S.tiles.some((t) => t.t === 'deco' && DECOR[t.id].fest), reward: 150 },
 ];
 
 const ROBOTS = {
@@ -160,8 +162,8 @@ const ROBOTS = {
 
 // Ting der låses op, som ikke står i tabellerne ovenfor.
 const PERKS = {
-  3: 'Ekspresordrer med dobbelt belønning',
-  4: 'Begivenheder: støvstorme og meteorregn',
+  3: 'Ekspresordrer med dobbelt belønning · Marsfestivalen',
+  4: 'Begivenheder: støvstorme og meteorregn · Asteroidejagt',
   5: 'Moderskibet kommer på besøg',
   6: 'Bygningsopgraderinger: flere pladser i køen og hurtigere produktion',
   11: 'Flere ordrepladser',
@@ -256,9 +258,29 @@ const DECOR = {
   'deco-trae':       { name: 'Marstræ',         cost: 300,  happy: 3,  level: 4 },
   'deco-statue':     { name: 'Astronautstatue', cost: 800,  happy: 6,  level: 7 },
   'deco-springvand': { name: 'Springvand',      cost: 1500, happy: 10, level: 9 },
+  // festivalpynt kan kun købes for festbilletter
+  'deco-lanterne':      { name: 'Lanternebue',    cost: 0, happy: 4,  level: 3, fest: true },
+  'deco-teleskop':      { name: 'Stjernekikkert', cost: 0, happy: 6,  level: 3, fest: true },
+  'deco-raketmonument': { name: 'Raketmonument',  cost: 0, happy: 12, level: 3, fest: true },
 };
 const HAPPY_MAX = 30;
 
 // Rumbørsen: priserne skifter hver time, og tre varer er i høj kurs hver dag.
 const MARKET_HOUR = 60 * 60 * 1000;
 const MARKET_BUY = ['kartoffel', 'alge', 'hvede', 'tomat', 'jordbaer', 'svamp', 'bomuld', 'kaffe', 'chili', 'druer', 'vand', 'jern', 'foder'];
+
+// ---------- Version 5 ----------
+
+// Marsfestivalen holdes torsdag til søndag. Ordrer giver festbilletter til festivalbutikken.
+const FESTIVAL = { level: 3, days: [4, 5, 6, 0] };
+const FEST_SHOP = [
+  { id: 'deco-lanterne',      kind: 'decor', tickets: 15 },
+  { id: 'deco-teleskop',      kind: 'decor', tickets: 30 },
+  { id: 'deco-raketmonument', kind: 'decor', tickets: 60 },
+  { id: 'krystal',            kind: 'item',  tickets: 10, n: 1 },
+  { id: 'jern',               kind: 'item',  tickets: 6,  n: 5 },
+  { id: 'coin',               kind: 'credits', tickets: 8, n: 400 },
+];
+
+// Asteroidejagt: et minispil på 30 sekunder, 3 gange om dagen.
+const ARCADE = { level: 4, plays: 3, seconds: 30 };

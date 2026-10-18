@@ -313,3 +313,25 @@ details.people summary::-webkit-details-marker { display: none; }
   .level small { display: none; }
   .stat { font-size: 15px; }
 }
+
+/* ---------- Version 5 ---------- */
+.fab { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: flex-end; }
+.fab button { width: 52px; height: 52px; padding: 6px; border-radius: 16px; background: var(--panel); }
+.fab button img { width: 34px; height: 34px; }
+.fab button[hidden] { display: none; }
+.fab .advisor { width: auto; padding: 4px 14px 4px 6px; gap: 6px; background: var(--accent); }
+.fab .advisor img { width: 40px; height: 40px; }
+.banner.edit { pointer-events: auto; background: #FFE7D2; top: 12px; z-index: 2; }
+.banner.edit button { padding: 4px 12px; margin-left: 4px; }
+body.editing .fab { display: none; }
+body.editing #tutorial { display: none; }
+.fest-chip { padding: 4px 12px 4px 6px; background: #FFE3EA; cursor: pointer; }
+.fest-chip[hidden] { display: none; }
+.fest-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #FFE3EA; border: 2.5px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.arcade { width: 100%; display: block; border-radius: 14px; border: 2.5px solid var(--line); touch-action: none; cursor: crosshair; }
+.arcade-hud { display: flex; justify-content: space-between; font-size: 18px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.arcade-stats { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .fab .advisor span { display: none; }
+  .fab .advisor { width: 52px; padding: 4px; }
+}

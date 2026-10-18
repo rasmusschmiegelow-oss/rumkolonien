@@ -31,6 +31,7 @@ function defaults(st) {
     event: { type: null, until: 0, nextAt: 0 }, pickups: [], mayor: false,
     medals: {}, expedition: null,
     research: { done: {}, active: null }, ship: null, shipNext: 0,
+    tickets: 0, decorInv: {}, arcade: { day: '', plays: 0, best: 0 },
   }, st, { stats });
 }
 
@@ -182,6 +183,7 @@ function deliver(i) {
   S.orders[i] = genOrder();
   S.stats.deliver++;
   track('deliver', 1);
+  giveTickets(1 + Math.min(2, Math.floor(o.credits / 150)));
   addXP(o.xp);
   launchShip();
   Sound.play('whoosh');
@@ -286,8 +288,13 @@ function buildOn(idx, what) {
     toast(`${icon('kuppel')} Ny drivhuskuppel bygget!`, 'good');
   } else if (DECOR[what]) {
     const d = DECOR[what];
-    if (S.credits < d.cost) return fail('Ikke nok kreditter.');
-    S.credits -= d.cost;
+    if (d.fest) {
+      if (!S.decorInv[what]) return fail('Køb den i festivalbutikken først.');
+      S.decorInv[what]--;
+    } else {
+      if (S.credits < d.cost) return fail('Ikke nok kreditter.');
+      S.credits -= d.cost;
+    }
     S.tiles[idx] = { t: 'deco', id: what };
     toast(`${icon(what)} ${d.name} sat op: +${d.happy} ${icon('lykke')}`, 'good');
   } else if (ANIMALS[what]) {
@@ -402,6 +409,7 @@ function deliverColonist() {
   const chapter = S.story[c.id] < def.lines.length ? ++S.story[c.id] : null;
   S.colonist = null;
   S.colonistNextAt = Date.now() + 90 * 1000;
+  giveTickets(2);
   S.stats.deliver++;
   track('deliver', 1);
   Sound.play('coin');
@@ -697,11 +705,17 @@ const orderPay = (credits) => Math.round(credits * payMult());
 function removeDecor(idx) {
   const t = S.tiles[idx];
   if (t.t !== 'deco') return;
-  const refund = Math.round(DECOR[t.id].cost / 2);
-  earn(refund);
+  const d = DECOR[t.id];
   S.tiles[idx] = { t: 'empty' };
   Sound.play('build');
-  toast(`Pynten er fjernet: +${refund} ${icon('coin')}`);
+  if (d.fest) {
+    S.decorInv[t.id] = (S.decorInv[t.id] || 0) + 1;
+    toast(`${d.name} er pakket ned. Du kan sætte den op igen fra byggemenuen.`);
+  } else {
+    const refund = Math.round(d.cost / 2);
+    earn(refund);
+    toast(`Pynten er fjernet: +${refund} ${icon('coin')}`);
+  }
   save();
 }
 
@@ -777,6 +791,7 @@ function loadCrate(i) {
   if (have(c.item) < c.n) return fail(`Mangler ${ITEMS[c.item].name}.`);
   addItem(c.item, -c.n);
   c.done = true;
+  giveTickets(2);
   const pay = orderPay(c.credits);
   earn(pay);
   addXP(c.xp);
@@ -825,4 +840,115 @@ function researchTick(now) {
   Sound.play('level');
   toast(`${icon('lab')} Forskning færdig: <b>${RESEARCH[a.id].name}</b>. ${RESEARCH[a.id].desc}`, 'good', 5000);
   save();
+}
+
+// ---------- Version 5: festival ----------
+const isFestival = () => S.level >= FESTIVAL.level && FESTIVAL.days.includes(new Date().getDay());
+function festivalEnds() {
+  const d = new Date();
+  const left = d.getDay() === 0 ? 0 : 7 - d.getDay(); // søndag er sidste dag
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + left + 1);
+  return end.getTime();
+}
+function festivalStarts() {
+  const d = new Date();
+  const days = (4 - d.getDay() + 7) % 7 || 7;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).getTime();
+}
+function giveTickets(n) {
+  if (!isFestival() || n <= 0) return;
+  S.tickets += n;
+  toast(`+${n} ${icon('festbillet')} festbillet${n > 1 ? 'ter' : ''}`, 'good', 1800);
+}
+function buyFest(i) {
+  const it = FEST_SHOP[i];
+  if (!isFestival()) return fail('Festivalbutikken er lukket.');
+  if (S.tickets < it.tickets) return fail('Ikke nok festbilletter.');
+  if (it.kind === 'item' && !spaceFor(it.n)) return fail('Lageret er fuldt.');
+  S.tickets -= it.tickets;
+  if (it.kind === 'decor') {
+    S.decorInv[it.id] = (S.decorInv[it.id] || 0) + 1;
+    toast(`${icon(it.id)} ${DECOR[it.id].name} er købt. Tryk på et ryddet felt for at sætte den op.`, 'good', 4000);
+  } else if (it.kind === 'item') addItem(it.id, it.n);
+  else earn(it.n);
+  Sound.play('coin');
+  save();
+  return true;
+}
+
+// ---------- Version 5: redigering ----------
+// Byt indholdet af to felter. Afgrøder, køer og dyr flytter med.
+function swapTiles(a, b) {
+  if (a === b || S.tiles[a].t === 'locked' || S.tiles[b].t === 'locked') return false;
+  [S.tiles[a], S.tiles[b]] = [S.tiles[b], S.tiles[a]];
+  S.pickups = S.pickups.filter((p) => p.idx !== a && p.idx !== b);
+  save();
+  return true;
+}
+
+// ---------- Version 5: minispil ----------
+function arcadePlaysLeft() {
+  const today = dayStr(new Date());
+  if (S.arcade.day !== today) { S.arcade.day = today; S.arcade.plays = 0; }
+  return Math.max(0, ARCADE.plays - S.arcade.plays);
+}
+function arcadeReward(score, golden) {
+  const credits = Math.round(score * (6 + S.level * 2));
+  const jern = Math.floor(score / 6);
+  const krystal = Math.min(2, golden);
+  S.arcade.plays++;
+  S.arcade.best = Math.max(S.arcade.best, score);
+  earn(credits);
+  addItem('jern', jern);
+  if (krystal) addItem('krystal', krystal);
+  addXP(Math.round(score / 2));
+  save();
+  return { credits, jern, krystal };
+}
+
+// ---------- Version 5: rådgiver ----------
+function adviceList() {
+  const now = Date.now(), out = [];
+  const find = (fn) => S.tiles.findIndex(fn);
+  const readyPlots = S.tiles.filter((t) => t.t === 'plot' && t.crop && now >= t.end).length;
+  if (readyPlots) out.push({ icon: 'sprout', text: `Høst ${readyPlots} ${readyPlots === 1 ? 'moden kuppel' : 'modne kupler'}. Træk fingeren hen over dem.`, idx: find((t) => t.t === 'plot' && t.crop && now >= t.end) });
+  const doneB = find((t) => t.t === 'b' && t.queue && t.queue.some((q) => q.end <= now));
+  if (doneB >= 0) out.push({ icon: S.tiles[doneB].id, text: `Saml de færdige varer i ${BUILDINGS[S.tiles[doneB].id].name.toLowerCase()}.`, idx: doneB });
+  const pen = find((t) => t.t === 'pen' && (penReady(t, now) || (penHungry(t) && have('foder'))));
+  if (pen >= 0) out.push({ icon: ANIMALS[S.tiles[pen].id].animal, text: `${ANIMALS[S.tiles[pen].id].animalName} venter på dig.`, idx: pen });
+  if (S.expedition && now >= S.expedition.end) out.push({ icon: 'rover', text: 'Roveren er tilbage med fund.', idx: find((t) => t.t === 'b' && t.id === 'garage') });
+  const padIdx = find((t) => t.t === 'pad');
+  if (S.ship && S.ship.crates.some((c) => !c.done && have(c.item) >= c.n)) out.push({ icon: 'moderskib', text: 'Du kan fylde en container på moderskibet.', idx: padIdx });
+  if (S.colonist && canFulfil(S.colonist)) out.push({ icon: 'col-' + S.colonist.id, text: `Du har det, ${COLONISTS[S.colonist.id].name} mangler.`, idx: padIdx });
+  const ord = S.orders.filter(canFulfil).length;
+  if (ord) out.push({ icon: 'rocket', text: `Du kan levere ${ord} ${ord === 1 ? 'ordre' : 'ordrer'}.`, idx: padIdx });
+  if (owns('lab') && !S.research.active && Object.keys(RESEARCH).some((id) => researchState(id) === 'open' && S.credits >= RESEARCH[id].credits && Object.entries(RESEARCH[id].cost).every(([it, q]) => have(it) >= q))) {
+    out.push({ icon: 'lab', text: 'Labbet står stille, og du har råd til ny forskning.', idx: find((t) => t.t === 'b' && t.id === 'lab') });
+  }
+  const idle = find((t) => t.t === 'b' && BUILDINGS[t.id].recipes.length && t.queue.length < queueMax(t)
+    && BUILDINGS[t.id].recipes.some((r) => RECIPES[r].level <= S.level && Object.entries(RECIPES[r].in).every(([it, q]) => have(it) >= q)));
+  if (idle >= 0) out.push({ icon: S.tiles[idle].id, text: `${BUILDINGS[S.tiles[idle].id].name} har plads i køen, og du har råvarerne.`, idx: idle });
+  const emptyPlots = S.tiles.filter((t) => t.t === 'plot' && !t.crop).length;
+  if (emptyPlots && S.credits >= CROPS.kartoffel.cost) out.push({ icon: 'kuppel', text: `${emptyPlots} ${emptyPlots === 1 ? 'kuppel står' : 'kupler står'} tomme. Plant noget.`, idx: find((t) => t.t === 'plot' && !t.crop) });
+  if (invTotal() >= cap() * 0.9) out.push({ icon: 'box', text: 'Lageret er næsten fuldt. Sælg på Rumbørsen, eller udvid det.', act: 'inventory' });
+  if (claimableGoals()) out.push({ icon: 'goal', text: 'Du har et ugemål, der er klar til at blive hentet.', act: 'colony' });
+  if (isFestival() && FEST_SHOP.some((f) => f.tickets <= S.tickets)) out.push({ icon: 'festbillet', text: 'Du har billetter nok til noget i festivalbutikken.', act: 'festival' });
+  if (S.level >= ARCADE.level && arcadePlaysLeft()) out.push({ icon: 'joystick', text: `Du har ${arcadePlaysLeft()} runder asteroidejagt tilbage i dag.`, act: 'arcade' });
+  if (!out.length) {
+    const rock = S.tiles.findIndex((t, i) => t.t === 'locked' && neighbourCleared(i));
+    if (rock >= 0 && S.credits >= clearCost(S.cleared)) out.push({ icon: 'rock', text: 'Ryd en klippe, og gør plads til mere.', idx: rock });
+    else out.push({ icon: 'moon', text: 'Alt kører. Kom tilbage om lidt, når tingene er klar.' });
+  }
+  return out;
+}
+
+// Antal ting, der venter på spilleren (bruges til app-ikonet).
+function readyCount() {
+  const now = Date.now();
+  let n = S.tiles.filter((t) => t.t === 'plot' && t.crop && now >= t.end).length;
+  n += S.tiles.filter((t) => t.t === 'b' && t.queue && t.queue.some((q) => q.end <= now)).length;
+  n += S.tiles.filter((t) => t.t === 'pen' && penReady(t, now)).length;
+  if (S.expedition && now >= S.expedition.end) n++;
+  n += S.orders.filter(canFulfil).length;
+  return n;
 }
