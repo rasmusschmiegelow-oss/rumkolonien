@@ -28,6 +28,64 @@ function tileAt(sx, sy) {
   return c >= 0 && c < COLS && r >= 0 && r < ROWS ? idxOf(r, c) : -1;
 }
 
+// ---------- Klik på det, man ser ----------
+// Bygninger er høje, så et tryk på taget ligger over feltet bagved. Derfor testes
+// tegningerne forfra og bagud, og først hvis intet rammes, bruges jordfeltet.
+const spriteAlpha = {};
+function spriteHit(name, size, footY, cx, cy, wx, wy, loose) {
+  const sp = SPRITES[name];
+  if (!sp) return false;
+  const k = size / sp.w;
+  const left = cx - (sp.w * k) / 2, top = cy - footY * k;
+  const u = (wx - left) / k, v = (wy - top) / k; // i spritens egne koordinater
+  if (u < 0 || v < 0 || u >= sp.w || v >= sp.h) return false;
+  if (!spriteAlpha[name]) {
+    const c = sp.img;
+    spriteAlpha[name] = { w: c.width, h: c.height, data: c.getContext('2d').getImageData(0, 0, c.width, c.height).data };
+  }
+  const a = spriteAlpha[name], scale = a.w / sp.w;
+  // lidt tolerance, så tynde master og kanter også kan rammes
+  const probes = loose ? [[3, 0], [-3, 0], [0, 3], [0, -3]] : [[0, 0]];
+  for (const [du, dv] of probes) {
+    const min = loose ? 120 : 30;
+    const px = Math.floor((u + du) * scale), py = Math.floor((v + dv) * scale);
+    if (px < 0 || py < 0 || px >= a.w || py >= a.h) continue;
+    if (a.data[(py * a.w + px) * 4 + 3] > min) return true;
+  }
+  return false;
+}
+
+function objectHit(idx, wx, wy, loose) {
+  const t = S.tiles[idx];
+  const [x, y] = tileCenter(idx);
+  const size = 96 * SPRITE_K;
+  if (t.t === 'b' || t.t === 'pen' || t.t === 'pad') return spriteHit(t.t === 'b' || t.t === 'pen' ? t.id : 'pad', size, 70, x, y, wx, wy, loose);
+  if (t.t === 'deco') return spriteHit(t.id, size * 0.85, 72, x, y, wx, wy, loose);
+  if (t.t === 'plot') {
+    // Kuplen er af glas, så kun dens nederste del og jordfeltet tæller.
+    // Ellers ville toppen af glasset stjæle tryk fra det, man kan se bagved.
+    const dx = (wx - x) / 46, dy = (wy - (y + 6)) / 34;
+    return wy <= y + 26 && dx * dx + dy * dy <= 1;
+  }
+  return false;
+}
+
+function pickTile(sx, sy) {
+  const [wx, wy] = toWorld(sx, sy);
+  // Først præcist på synlige pixels, så med lidt tolerance til tynde master og kanter.
+  for (const loose of [false, true]) {
+    let best = -1, bestD = -1;
+    for (let i = 0; i < S.tiles.length; i++) {
+      const t = S.tiles[i];
+      if (t.t === 'locked' || t.t === 'empty') continue;
+      const d = Math.floor(i / COLS) + (i % COLS);
+      if (d > bestD && objectHit(i, wx, wy, loose)) { best = i; bestD = d; }
+    }
+    if (best >= 0) return best;
+  }
+  return tileAt(sx, sy);
+}
+
 function fitZoom() { return Math.min(viewW / ((COLS + ROWS) * TW / 2 + 40), viewH / ((COLS + ROWS) * TH / 2 + 80)); }
 function clampCam() {
   const minZ = fitZoom() * 0.9;
@@ -512,6 +570,14 @@ function drawScene(now) {
   order.sort((a, b) => a.d - b.d);
   for (const o of order) o.fn();
 
+  // Det, musen peger på, får en blød kant, så man kan se, hvad et klik rammer.
+  if (hoverIdx >= 0 && !drag && S.tiles[hoverIdx] && (S.tiles[hoverIdx].t !== 'locked' || neighbourCleared(hoverIdx))) {
+    const [x, y] = tileCenter(hoverIdx);
+    diamond(x, y, TW - 4, TH - 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,122,26,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
   // Det valgte felt i redigeringstilstand markeres oven på alt andet.
   if (editMode && editSel >= 0) {
     const [x, y] = tileCenter(editSel);
@@ -724,7 +790,7 @@ canvas.addEventListener('pointerdown', (e) => {
   const [x, y] = localPos(e);
   pointers.set(e.pointerId, { x, y });
   if (pointers.size === 1) {
-    const idx = tileAt(x, y);
+    const idx = pickTile(x, y);
     drag = { sx: x, sy: y, mode: 'pending', start: idx, last: idx, cx: cam.x, cy: cam.y };
   } else if (pointers.size === 2) {
     const [p1, p2] = [...pointers.values()];
@@ -732,7 +798,15 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 
+let hoverIdx = -1;
 canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse' && !pointers.size) {
+    const [x, y] = localPos(e);
+    hoverIdx = visiting ? -1 : (petHit(x, y) ? -2 : pickTile(x, y));
+    const t = S.tiles[hoverIdx];
+    canvas.style.cursor = hoverIdx === -2 || (t && t.t !== 'locked') || (t && neighbourCleared(hoverIdx)) ? 'pointer' : 'grab';
+    return;
+  }
   if (!pointers.has(e.pointerId) || !drag) return;
   const [x, y] = localPos(e);
   pointers.set(e.pointerId, { x, y });
@@ -760,7 +834,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (drag.mode === 'pan') {
     cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; clampCam();
   } else if (drag.mode === 'harvest' || drag.mode === 'plant') {
-    const idx = tileAt(x, y);
+    const idx = pickTile(x, y);
     if (idx >= 0 && idx !== drag.last) {
       drag.last = idx;
       if (drag.mode === 'harvest') harvest(idx, true);
@@ -780,6 +854,7 @@ function endPointer(e) {
   else if (drag.mode === 'pinch') drag = { mode: 'done' };
 }
 canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointerleave', () => { hoverIdx = -1; });
 canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); drag = null; });
 
 canvas.addEventListener('wheel', (e) => {
