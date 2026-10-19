@@ -1,9 +1,9 @@
 // Service worker: gør spillet installérbart og spilbart uden net.
-const CACHE = 'rumkolonien-v14';
+const CACHE = 'rumkolonien-v15';
 const FILES = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/data.js', 'js/native.js', 'js/audio.js', 'js/music.js', 'js/arcade.js', 'js/notify.js', 'js/cloud.js', 'js/sprites.js', 'js/state.js', 'js/colony.js', 'js/map.js', 'js/ui.js', 'js/main.js',
-  'assets/app-192.png', 'assets/app-512.png',
+  'assets/app-192.png', 'assets/app-512.png', 'assets/fonts/space-grotesk-latin.woff2', 'assets/fonts/space-grotesk-latin-ext.woff2',
   "assets/sfx/boom1.m4a",
   "assets/sfx/boom2.m4a",
   "assets/sfx/boom3.m4a",
